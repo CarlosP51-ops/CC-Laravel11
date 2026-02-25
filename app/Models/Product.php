@@ -10,7 +10,8 @@ class Product extends Model
     use HasFactory;
 
     protected $fillable = [
-        'vendor_id',
+        'seller_id',
+        'category_id',
         'name',
         'slug',
         'description',
@@ -31,14 +32,14 @@ class Product extends Model
         ];
     }
 
-    public function vendor()
+    public function seller()
     {
         return $this->belongsTo(Seller::class);
     }
 
-    public function categories()
+    public function category()
     {
-        return $this->belongsToMany(Category::class);
+        return $this->belongsTo(Category::class);
     }
 
     public function images()
