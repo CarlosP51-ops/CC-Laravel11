@@ -14,6 +14,7 @@ class Review extends Model
         'user_id',
         'rating',
         'comment',
+        'helpful_count',
         'is_approved',
     ];
 

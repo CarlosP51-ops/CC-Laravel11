@@ -220,4 +220,74 @@ class HomeController extends Controller
             'message' => 'Inscription réussie ! Vous recevrez bientôt nos actualités.'
         ]);
     }
+
+    /**
+     * Get popular categories for EmptyCart page
+     */
+    public function popularCategories()
+    {
+        $categories = Category::where('is_active', true)
+            ->whereNull('parent_id')
+            ->withCount(['products' => function ($query) {
+                $query->where('is_active', true);
+            }])
+            ->orderBy('products_count', 'desc')
+            ->limit(4)
+            ->get()
+            ->map(function ($category) {
+                return [
+                    'id' => $category->id,
+                    'name' => $category->name,
+                    'slug' => $category->slug,
+                    'products_count' => $category->products_count,
+                    'icon' => $this->getCategoryIcon($category->name),
+                ];
+            });
+
+        return response()->json([
+            'success' => true,
+            'data' => $categories
+        ]);
+    }
+
+    /**
+     * Get trending products for EmptyCart page
+     */
+    public function trendingProducts()
+    {
+        $products = Product::with(['category', 'seller', 'images', 'reviews'])
+            ->where('is_active', true)
+            ->where('stock_quantity', '>', 0)
+            ->withCount('orderItems')
+            ->withAvg('reviews', 'rating')
+            ->withCount('reviews')
+            ->orderBy('order_items_count', 'desc')
+            ->limit(3)
+            ->get()
+            ->map(function ($product) {
+                return $this->formatProduct($product);
+            });
+
+        return response()->json([
+            'success' => true,
+            'data' => $products
+        ]);
+    }
+
+    /**
+     * Get icon name for category (à personnaliser selon vos besoins)
+     */
+    private function getCategoryIcon($categoryName)
+    {
+        $icons = [
+            'Électronique' => 'Laptop',
+            'Mode' => 'Shirt',
+            'Maison' => 'Home',
+            'Sport' => 'Dumbbell',
+            'Livres' => 'Book',
+            'Jouets' => 'Gamepad2',
+        ];
+
+        return $icons[$categoryName] ?? 'Package';
+    }
 }
