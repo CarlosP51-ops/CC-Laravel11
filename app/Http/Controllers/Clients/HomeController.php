@@ -8,8 +8,10 @@ use App\Models\Category;
 use App\Models\Seller;
 use App\Models\User;
 use App\Models\Order;
+use App\Models\NewsletterSubscription;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Cache;
 
 class HomeController extends Controller
 {
@@ -18,16 +20,21 @@ class HomeController extends Controller
      */
     public function index()
     {
-        return response()->json([
-            'success' => true,
-            'data' => [
+        // Cache les données pendant 1 heure (3600 secondes)
+        $data = Cache::remember('home_page_data', 3600, function () {
+            return [
                 'hero_stats' => $this->getHeroStats(),
                 'categories' => $this->getCategories(),
                 'featured_products' => $this->getFeaturedProducts(),
                 'new_products' => $this->getNewProducts(),
                 'best_sellers' => $this->getBestSellers(),
                 'platform_stats' => $this->getPlatformStats()
-            ]
+            ];
+        });
+
+        return response()->json([
+            'success' => true,
+            'data' => $data
         ]);
     }
 
@@ -209,11 +216,18 @@ class HomeController extends Controller
     public function subscribeNewsletter(Request $request)
     {
         $request->validate([
-            'email' => 'required|email'
+            'email' => 'required|email|unique:newsletter_subscriptions,email'
+        ], [
+            'email.required' => 'L\'adresse email est requise.',
+            'email.email' => 'L\'adresse email n\'est pas valide.',
+            'email.unique' => 'Cette adresse email est déjà inscrite à notre newsletter.',
         ]);
 
-        // Logique d'inscription newsletter à implémenter
-        // Vous pouvez créer une table newsletter_subscriptions si nécessaire
+        NewsletterSubscription::create([
+            'email' => $request->email,
+            'is_active' => true,
+            'subscribed_at' => now(),
+        ]);
 
         return response()->json([
             'success' => true,

@@ -10,6 +10,139 @@ use Illuminate\Support\Facades\DB;
 class ProductController extends Controller
 {
     /**
+     * List products with filters and pagination
+     * GET /api/products
+     */
+    public function index(Request $request)
+    {
+        $query = Product::with(['category', 'seller', 'images'])
+            ->where('is_active', true)
+            ->where('stock_quantity', '>', 0)
+            ->withAvg('reviews', 'rating')
+            ->withCount('reviews')
+            ->withCount('orderItems');
+
+        // Filtre par catégorie
+        if ($request->has('category')) {
+            $query->whereHas('category', function ($q) use ($request) {
+                $q->where('slug', $request->category);
+            });
+        }
+
+        // Filtre par vendeur
+        if ($request->has('seller')) {
+            $query->whereHas('seller', function ($q) use ($request) {
+                $q->where('slug', $request->seller);
+            });
+        }
+
+        // Filtre par prix
+        if ($request->has('min_price')) {
+            $query->where('price', '>=', $request->min_price);
+        }
+        if ($request->has('max_price')) {
+            $query->where('price', '<=', $request->max_price);
+        }
+
+        // Filtre par note
+        if ($request->has('min_rating')) {
+            $query->having('reviews_avg_rating', '>=', $request->min_rating);
+        }
+
+        // Recherche
+        if ($request->has('search')) {
+            $search = $request->search;
+            $query->where(function ($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                  ->orWhere('description', 'like', "%{$search}%")
+                  ->orWhere('short_description', 'like', "%{$search}%");
+            });
+        }
+
+        // Tri
+        $sortBy = $request->get('sort_by', 'created_at');
+        $sortOrder = $request->get('sort_order', 'desc');
+
+        switch ($sortBy) {
+            case 'price':
+                $query->orderBy('price', $sortOrder);
+                break;
+            case 'rating':
+                $query->orderBy('reviews_avg_rating', $sortOrder);
+                break;
+            case 'sales':
+                $query->orderBy('order_items_count', $sortOrder);
+                break;
+            case 'name':
+                $query->orderBy('name', $sortOrder);
+                break;
+            default:
+                $query->orderBy('created_at', $sortOrder);
+        }
+
+        // Pagination
+        $perPage = $request->get('per_page', 12);
+        $products = $query->paginate($perPage);
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'products' => $products->map(function ($product) {
+                    return $this->formatProductCard($product);
+                }),
+                'pagination' => [
+                    'current_page' => $products->currentPage(),
+                    'last_page' => $products->lastPage(),
+                    'per_page' => $products->perPage(),
+                    'total' => $products->total(),
+                    'from' => $products->firstItem(),
+                    'to' => $products->lastItem(),
+                ]
+            ]
+        ]);
+    }
+
+    /**
+     * Format product for card display
+     */
+    private function formatProductCard($product)
+    {
+        $primaryImage = $product->images->where('is_primary', true)->first();
+        $discountPercentage = null;
+        
+        if ($product->compare_at_price && $product->compare_at_price > $product->price) {
+            $discountPercentage = round((($product->compare_at_price - $product->price) / $product->compare_at_price) * 100);
+        }
+
+        return [
+            'id' => $product->id,
+            'name' => $product->name,
+            'slug' => $product->slug,
+            'description' => $product->short_description ?? substr($product->description, 0, 100) . '...',
+            'price' => (float) $product->price,
+            'compare_at_price' => $product->compare_at_price ? (float) $product->compare_at_price : null,
+            'discount_percentage' => $discountPercentage,
+            'rating' => round($product->reviews_avg_rating ?? 0, 1),
+            'reviews_count' => $product->reviews_count ?? 0,
+            'sales_count' => $product->order_items_count ?? 0,
+            'stock_quantity' => $product->stock_quantity,
+            'image' => $primaryImage ? $primaryImage->image_path : ($product->images->first()?->image_path ?? null),
+            'category' => $product->category ? [
+                'id' => $product->category->id,
+                'name' => $product->category->name,
+                'slug' => $product->category->slug
+            ] : null,
+            'seller' => [
+                'id' => $product->seller->id,
+                'store_name' => $product->seller->store_name,
+                'slug' => $product->seller->slug,
+                'is_verified' => $product->seller->is_verified ?? false,
+                'logo' => $product->seller->logo
+            ]
+        ];
+    }
+
+    /**
      * Display product details with preview data
      * GET /api/products/{id}
      */
