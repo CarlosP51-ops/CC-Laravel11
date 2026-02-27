@@ -29,9 +29,10 @@ class RegisterRequest extends FormRequest
         $rules = [
             'name' => self::NAME_RULES,
             'email' => self::EMAIL_RULES,
-            'password' => ['required', 'confirmed', Password::defaults()],
+            'password' => ['required', Password::defaults()],
+            'password_confirmation' => 'required_with:password|same:password',
             'phone' => self::PHONE_RULES,
-            'role' => 'required|string|in:client,vendor',
+            'role' => 'required|string|in:client,customer,vendor',
         ];
 
         if ($this->role === 'vendor') {
@@ -40,8 +41,8 @@ class RegisterRequest extends FormRequest
                 'store_name' => self::STORE_NAME_RULES,
                 'slug' => self::SLUG_RULES,
                 'description' => self::DESCRIPTION_RULES,
-                'logo' => 'nullable|image', // Règle pour l'image
-                'banner' => 'nullable|image',
+                'logo' => 'nullable|image|mimes:jpeg,jpg,png,gif,webp|max:2048',
+                'banner' => 'nullable|image|mimes:jpeg,jpg,png,gif,webp|max:5120',
                 'address' => self::ADDRESS_RULES,
                 'city' => self::CITY_RULES,
                 'postal_code' => self::POSTAL_CODE_RULES,
@@ -55,24 +56,25 @@ class RegisterRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'name.required' => 'Please provide your name.',
-            'email.required' => 'An email address is required.',
-            'email.email' => 'Please provide a valid email address.',
-            'email.unique' => 'This email is already registered.',
-            'password.required' => 'Please enter a password.',
-            'password.confirmed' => 'Passwords do not match.',
-            'phone.max' => 'The phone number may not be greater than 20 characters.',
-            'role.required' => 'Please specify a role (client or vendor).',
-            'store_name.required' => 'Please provide your store name.',
-            'slug.required' => 'Please provide a unique store slug.',
-            'slug.unique' => 'This slug is already taken.',
-            'description' => 'The description is optional.',
-            'logo.image' => 'The logo must be an image file.',
-            'banner.image' => 'The banner must be an image file.',
-            'address.max' => 'The address may not be greater than 255 characters.',
-            'city.max' => 'The city may not be greater than 100 characters.',
-            'postal_code.max' => 'The postal code may not be greater than 20 characters.',
-            'country.max' => 'The country may not be greater than 100 characters.',
+            'name.required' => 'Veuillez fournir votre nom complet.',
+            'email.required' => 'Une adresse email est requise.',
+            'email.email' => 'Veuillez fournir une adresse email valide.',
+            'email.unique' => 'Cet email est déjà enregistré.',
+            'password.required' => 'Veuillez entrer un mot de passe.',
+            'password_confirmation.required_with' => 'Veuillez confirmer votre mot de passe.',
+            'password_confirmation.same' => 'Les mots de passe ne correspondent pas.',
+            'phone.max' => 'Le numéro de téléphone ne peut pas dépasser 20 caractères.',
+            'role.required' => 'Veuillez spécifier un rôle (client ou vendeur).',
+            'role.in' => 'Le rôle doit être client ou vendeur.',
+            'store_name.required' => 'Veuillez fournir le nom de votre boutique.',
+            'slug.required' => 'Veuillez fournir un slug unique pour votre boutique.',
+            'slug.unique' => 'Ce slug est déjà utilisé.',
+            'logo.image' => 'Le logo doit être une image.',
+            'logo.mimes' => 'Le logo doit être au format jpeg, jpg, png, gif ou webp.',
+            'logo.max' => 'Le logo ne peut pas dépasser 2 Mo.',
+            'banner.image' => 'La bannière doit être une image.',
+            'banner.mimes' => 'La bannière doit être au format jpeg, jpg, png, gif ou webp.',
+            'banner.max' => 'La bannière ne peut pas dépasser 5 Mo.',
         ];
     }
 }
