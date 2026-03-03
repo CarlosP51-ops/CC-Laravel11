@@ -173,6 +173,39 @@ class ProductController extends Controller
             ]
         ]);
     }
+    /**
+     * Display product details by slug (more secure)
+     * GET /api/products/slug/{slug}
+     */
+    public function showBySlug($slug)
+    {
+        $product = Product::where('slug', $slug)
+            ->with([
+                'category',
+                'seller',
+                'images',
+                'variants',
+                'reviews' => function ($query) {
+                    $query->with('user')->latest()->limit(5);
+                }
+            ])
+            ->withAvg('reviews', 'rating')
+            ->withCount('reviews')
+            ->withCount('orderItems')
+            ->firstOrFail();
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'product' => $this->formatProductDetails($product),
+                'reviews_preview' => $this->getReviewsPreview($product),
+                'related_products' => $this->getRelatedProducts($product, 4),
+                'technical_details' => $this->getTechnicalDetails($product),
+                'breadcrumb' => $this->getBreadcrumb($product)
+            ]
+        ]);
+    }
+
 
     /**
      * Get related products

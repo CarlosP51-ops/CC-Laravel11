@@ -137,4 +137,87 @@ public function register(RegisterRequest $request)
             'user' => new UserResource($request->user())
         ]);
     }
+
+    /**
+     * Mettre à jour le profil utilisateur
+     */
+    public function updateProfile(Request $request)
+    {
+        $validated = $request->validate([
+            'fullname' => 'sometimes|string|max:255',
+            'phone' => 'sometimes|string|max:20',
+            'location' => 'sometimes|string|max:255',
+            'website' => 'sometimes|url|max:255',
+        ]);
+
+        $user = $request->user();
+        $user->update($validated);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Profil mis à jour avec succès',
+            'data' => [
+                'user' => new UserResource($user)
+            ]
+        ]);
+    }
+
+    /**
+     * Changer le mot de passe
+     */
+    public function changePassword(Request $request)
+    {
+        $validated = $request->validate([
+            'current_password' => 'required|string',
+            'password' => 'required|string|min:8|confirmed',
+        ]);
+
+        $user = $request->user();
+
+        if (!Hash::check($validated['current_password'], $user->password)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Le mot de passe actuel est incorrect',
+            ], 400);
+        }
+
+        $user->update([
+            'password' => Hash::make($validated['password'])
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Mot de passe modifié avec succès',
+        ]);
+    }
+
+    /**
+     * Récupérer les statistiques de l'utilisateur
+     */
+    public function getStats(Request $request)
+    {
+        $user = $request->user();
+
+        // Compter les commandes
+        $totalOrders = $user->orders()->count();
+
+        // Compter les favoris (wishlist)
+        $totalFavorites = $user->wishlists()->count();
+
+        // Compter les avis
+        $totalReviews = $user->reviews()->count();
+
+        // Compter les vendeurs suivis
+        $totalFollowedSellers = $user->followedSellers()->count();
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'total_orders' => $totalOrders,
+                'total_favorites' => $totalFavorites,
+                'total_reviews' => $totalReviews,
+                'total_followed_sellers' => $totalFollowedSellers,
+            ]
+        ]);
+    }
 }

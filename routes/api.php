@@ -6,6 +6,8 @@ use App\Http\Controllers\Auth\ForgotPasswordController;
 use App\Http\Controllers\Auth\EmailVerificationController;
 use App\Http\Controllers\Clients\CartController;
 use App\Http\Controllers\Clients\HomeController;
+use App\Http\Controllers\Clients\OrderController;
+use App\Http\Controllers\Clients\PaymentController;
 use App\Http\Controllers\Clients\ProductController;
 use App\Http\Controllers\Clients\ReviewController;
 use Illuminate\Support\Facades\Route;
@@ -30,7 +32,8 @@ Route::get('/products/trending', [HomeController::class, 'trendingProducts']);
 // Product Routes (public)
 Route::prefix('products')->group(function () {
     Route::get('/', [ProductController::class, 'index']);
-    Route::get('/{id}', [ProductController::class, 'show']);
+    Route::get('/slug/{slug}', [ProductController::class, 'showBySlug']); // Route par slug (plus sécurisée)
+    Route::get('/{id}', [ProductController::class, 'show']); // Route par ID (pour compatibilité)
     Route::get('/{id}/related', [ProductController::class, 'related']);
     Route::get('/{product}/reviews', [ReviewController::class, 'index']);
 });
@@ -38,6 +41,9 @@ Route::prefix('products')->group(function () {
 // Routes protégées par token
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('/user', [AuthController::class, 'me']);
+    Route::put('/user/profile', [AuthController::class, 'updateProfile']);
+    Route::put('/user/password', [AuthController::class, 'changePassword']);
+    Route::get('/user/stats', [AuthController::class, 'getStats']);
     Route::post('/logout', [AuthController::class, 'logout']);
 
     // Vérification d'email (si activée)
@@ -57,5 +63,18 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::delete('/items/{itemId}', [CartController::class, 'removeItem']);
         Route::delete('/', [CartController::class, 'clear']);
         Route::post('/apply-coupon', [CartController::class, 'applyCoupon']);
+    });
+
+    // Order Routes (protected)
+    Route::prefix('orders')->group(function () {
+        Route::get('/', [OrderController::class, 'index']);
+        Route::post('/', [OrderController::class, 'store']);
+        Route::get('/{id}', [OrderController::class, 'show']);
+    });
+
+    // Payment Routes (protected)
+    Route::prefix('payments')->group(function () {
+        Route::get('/history', [PaymentController::class, 'getPaymentHistory']);
+        Route::get('/stats', [PaymentController::class, 'getPaymentStats']);
     });
 });

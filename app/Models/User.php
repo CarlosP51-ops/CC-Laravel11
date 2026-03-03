@@ -81,4 +81,10 @@ class User extends Authenticatable
     {
         return $this->hasMany(Wishlist::class);
     }
+
+    public function followedSellers()
+    {
+        return $this->belongsToMany(Seller::class, 'seller_followers', 'user_id', 'seller_id')
+                    ->withTimestamps();
+    }
 }
