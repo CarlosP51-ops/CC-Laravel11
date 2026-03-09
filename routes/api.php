@@ -9,7 +9,13 @@ use App\Http\Controllers\Clients\HomeController;
 use App\Http\Controllers\Clients\OrderController;
 use App\Http\Controllers\Clients\PaymentController;
 use App\Http\Controllers\Clients\ProductController;
+use App\Http\Controllers\Clients\PromotionController;
 use App\Http\Controllers\Clients\ReviewController;
+use App\Http\Controllers\Clients\WishlistController;
+use App\Http\Controllers\Vendors\DashboardController as VendorDashboardController;
+use App\Http\Controllers\Vendors\ProductController as VendorProductController;
+use App\Http\Controllers\Vendors\OrderController as VendorOrderController;
+use App\Http\Controllers\Vendors\PaymentController as VendorPaymentController;
 use Illuminate\Support\Facades\Route;
 
 // Routes publiques
@@ -36,6 +42,12 @@ Route::prefix('products')->group(function () {
     Route::get('/{id}', [ProductController::class, 'show']); // Route par ID (pour compatibilité)
     Route::get('/{id}/related', [ProductController::class, 'related']);
     Route::get('/{product}/reviews', [ReviewController::class, 'index']);
+});
+
+// Promotion Routes (public)
+Route::prefix('promotions')->group(function () {
+    Route::get('/', [PromotionController::class, 'index']);
+    Route::get('/top-deals', [PromotionController::class, 'topDeals']);
 });
 
 // Routes protégées par token
@@ -76,5 +88,52 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::prefix('payments')->group(function () {
         Route::get('/history', [PaymentController::class, 'getPaymentHistory']);
         Route::get('/stats', [PaymentController::class, 'getPaymentStats']);
+    });
+
+    // Wishlist Routes (protected)
+    Route::prefix('wishlist')->group(function () {
+        Route::get('/', [WishlistController::class, 'index']);
+        Route::post('/', [WishlistController::class, 'store']);
+        Route::delete('/{id}', [WishlistController::class, 'destroy']);
+        Route::post('/delete-multiple', [WishlistController::class, 'destroyMultiple']);
+        Route::get('/check/{productId}', [WishlistController::class, 'check']);
+    });
+
+    // Vendor Routes (protected - role: vendor)
+    Route::middleware('role:vendor')->prefix('vendor')->group(function () {
+        Route::prefix('dashboard')->group(function () {
+            Route::get('/stats', [VendorDashboardController::class, 'getStats']);
+            Route::get('/revenue-chart', [VendorDashboardController::class, 'getRevenueChart']);
+            Route::get('/recent-orders', [VendorDashboardController::class, 'getRecentOrders']);
+            Route::get('/top-products', [VendorDashboardController::class, 'getTopProducts']);
+        });
+
+        // Product Management Routes
+        Route::prefix('products')->group(function () {
+            Route::get('/categories', [VendorProductController::class, 'getCategories']);
+            Route::get('/', [VendorProductController::class, 'index']);
+            Route::post('/', [VendorProductController::class, 'store']);
+            Route::get('/{id}', [VendorProductController::class, 'show']);
+            Route::put('/{id}', [VendorProductController::class, 'update']);
+            Route::delete('/{id}', [VendorProductController::class, 'destroy']);
+            Route::patch('/{id}/toggle-status', [VendorProductController::class, 'toggleStatus']);
+        });
+
+        // Order Management Routes
+        Route::prefix('orders')->group(function () {
+            Route::get('/', [VendorOrderController::class, 'index']);
+            Route::get('/{id}', [VendorOrderController::class, 'show']);
+            Route::patch('/{id}/status', [VendorOrderController::class, 'updateStatus']);
+            Route::patch('/{id}/tracking', [VendorOrderController::class, 'updateTracking']);
+            Route::post('/{id}/notes', [VendorOrderController::class, 'addNote']);
+        });
+
+        // Payment Management Routes
+        Route::prefix('payments')->group(function () {
+            Route::get('/stats', [VendorPaymentController::class, 'stats']);
+            Route::get('/transactions', [VendorPaymentController::class, 'transactions']);
+            Route::post('/withdrawal', [VendorPaymentController::class, 'requestWithdrawal']);
+            Route::get('/methods', [VendorPaymentController::class, 'paymentMethods']);
+        });
     });
 });

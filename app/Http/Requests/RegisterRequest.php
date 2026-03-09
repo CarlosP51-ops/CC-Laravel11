@@ -26,13 +26,17 @@ class RegisterRequest extends FormRequest
 
     public function rules(): array
     {
+        // Log pour debug
+        \Log::info('RegisterRequest - Role reçu:', ['role' => $this->role]);
+        \Log::info('RegisterRequest - Tous les champs:', $this->all());
+        
         $rules = [
             'name' => self::NAME_RULES,
             'email' => self::EMAIL_RULES,
             'password' => ['required', Password::defaults()],
             'password_confirmation' => 'required_with:password|same:password',
             'phone' => self::PHONE_RULES,
-            'role' => 'required|string|in:client,customer,vendor',
+            'role' => 'required|string|in:client,vendor',
         ];
 
         if ($this->role === 'vendor') {
@@ -65,7 +69,7 @@ class RegisterRequest extends FormRequest
             'password_confirmation.same' => 'Les mots de passe ne correspondent pas.',
             'phone.max' => 'Le numéro de téléphone ne peut pas dépasser 20 caractères.',
             'role.required' => 'Veuillez spécifier un rôle (client ou vendeur).',
-            'role.in' => 'Le rôle doit être client ou vendeur.',
+            'role.in' => 'Le rôle doit être client ou vendor.',
             'store_name.required' => 'Veuillez fournir le nom de votre boutique.',
             'slug.required' => 'Veuillez fournir un slug unique pour votre boutique.',
             'slug.unique' => 'Ce slug est déjà utilisé.',

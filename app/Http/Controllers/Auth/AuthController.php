@@ -27,19 +27,16 @@ public function register(RegisterRequest $request)
     DB::beginTransaction(); // Commence la transaction
 
     try {
-        // Normaliser le rôle (customer -> client)
-        $role = $request->role === 'customer' ? 'client' : $request->role;
-        
         // Créer l'utilisateur
         $user = User::create([
             'fullname' => $request->name,
             'email' => $request->email,
             'password' => Hash::make($request->password),
             'phone' => $request->phone,
-            'role' => $role,
+            'role' => $request->role,
         ]);
         
-        if ($role === 'vendor') {
+        if ($request->role === 'vendor') {
             // Vérifiez si la boutique existe déjà
             if (Seller::where('store_name', $request->store_name)->exists()) {
                 return response()->json([

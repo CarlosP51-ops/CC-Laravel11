@@ -14,11 +14,11 @@ class UserResource extends JsonResource
             'fullname' => $this->fullname,
             'email' => $this->email,
             'phone' => $this->phone,
-            'role' => $this->role,
+            'role' => $this->role->value ?? $this->role, // Extraire la valeur de l'enum
         ];
 
         // Vérifiez si l'utilisateur est un vendeur
-        if ($this->role === 'vendor') {
+        if ($this->role->value === 'vendor' || $this->role === 'vendor') {
             // Chargez également les détails du vendeur associés
             $seller = $this->seller; // Ceci suppose que vous avez une relation définie dans le modèle User
 
