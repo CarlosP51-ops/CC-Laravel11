@@ -14,6 +14,7 @@ class PaymentController extends Controller
     /**
      * Récupérer les statistiques de paiement du vendeur
      */
+    
     public function stats()
     {
         $user = Auth::user();

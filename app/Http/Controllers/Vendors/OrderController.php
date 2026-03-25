@@ -17,7 +17,15 @@ class OrderController extends Controller
     public function index(Request $request)
     {
         try {
-            $vendorId = Auth::id();
+            $user = Auth::user();
+            $seller = $user->seller;
+
+            if (!$seller) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Profil vendeur non trouvé'
+                ], 404);
+            }
             
             // Paramètres de filtrage
             $status = $request->input('status');
@@ -27,17 +35,12 @@ class OrderController extends Controller
             $sortBy = $request->input('sort_by', 'created_at');
             $sortOrder = $request->input('sort_order', 'desc');
 
-            // Query de base - commandes contenant des produits du vendeur
-            $query = Order::whereHas('items.product', function ($q) use ($vendorId) {
-                $q->where('vendor_id', $vendorId);
-            })->with([
-                'user:id,name,email',
-                'items' => function ($q) use ($vendorId) {
-                    $q->whereHas('product', function ($query) use ($vendorId) {
-                        $query->where('vendor_id', $vendorId);
-                    })->with('product:id,name,price,images');
-                }
-            ]);
+            // Query de base - commandes du vendeur
+            $query = Order::where('seller_id', $seller->id)
+                ->with([
+                    'user:id,fullname,email,phone',
+                    'items.product:id,name,price,images'
+                ]);
 
             // Filtre par statut
             if ($status && $status !== 'all') {
@@ -49,7 +52,7 @@ class OrderController extends Controller
                 $query->where(function ($q) use ($search) {
                     $q->where('order_number', 'like', "%{$search}%")
                       ->orWhereHas('user', function ($query) use ($search) {
-                          $query->where('name', 'like', "%{$search}%")
+                          $query->where('fullname', 'like', "%{$search}%")
                                 ->orWhere('email', 'like', "%{$search}%");
                       });
                 });
@@ -79,7 +82,7 @@ class OrderController extends Controller
             $orders = $query->paginate($perPage);
 
             // Calculer les statistiques
-            $stats = $this->calculateStats($vendorId);
+            $stats = $this->calculateStats($seller->id);
 
             return response()->json([
                 'success' => true,
@@ -109,15 +112,19 @@ class OrderController extends Controller
     public function show($id)
     {
         try {
-            $vendorId = Auth::id();
+            $user = Auth::user();
+            $seller = $user->seller;
+
+            if (!$seller) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Profil vendeur non trouvé'
+                ], 404);
+            }
 
             $order = Order::with([
-                'user:id,name,email,phone,created_at',
-                'items' => function ($q) use ($vendorId) {
-                    $q->whereHas('product', function ($query) use ($vendorId) {
-                        $query->where('vendor_id', $vendorId);
-                    })->with('product:id,name,description,price,images');
-                },
+                'user:id,fullname,email,phone,created_at',
+                'items.product:id,name,description,price,images',
                 'shippingAddress',
                 'billingAddress'
             ])->find($id);
@@ -129,40 +136,17 @@ class OrderController extends Controller
                 ], 404);
             }
 
-            // Vérifier que la commande contient des produits du vendeur
-            $hasVendorProducts = $order->items->filter(function ($item) use ($vendorId) {
-                return $item->product && $item->product->vendor_id == $vendorId;
-            })->count() > 0;
-
-            if (!$hasVendorProducts) {
+            // Vérifier que la commande appartient au vendeur
+            if ($order->seller_id !== $seller->id) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Vous n\'avez pas accès à cette commande'
                 ], 403);
             }
 
-            // Calculer les totaux pour les produits du vendeur uniquement
-            $vendorItems = $order->items->filter(function ($item) use ($vendorId) {
-                return $item->product && $item->product->vendor_id == $vendorId;
-            });
-
-            $subtotal = $vendorItems->sum(function ($item) {
-                return $item->price * $item->quantity;
-            });
-
-            $tax = $subtotal * 0.20; // TVA 20%
-            $total = $subtotal + $tax;
-
-            $orderData = $order->toArray();
-            $orderData['vendor_totals'] = [
-                'subtotal' => $subtotal,
-                'tax' => $tax,
-                'total' => $total,
-            ];
-
             return response()->json([
                 'success' => true,
-                'data' => $orderData
+                'data' => $order
             ]);
         } catch (\Exception $e) {
             return response()->json([
@@ -179,7 +163,15 @@ class OrderController extends Controller
     public function updateStatus(Request $request, $id)
     {
         try {
-            $vendorId = Auth::id();
+            $user = Auth::user();
+            $seller = $user->seller;
+
+            if (!$seller) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Profil vendeur non trouvé'
+                ], 404);
+            }
 
             $request->validate([
                 'status' => 'required|in:pending,processing,shipped,delivered,cancelled'
@@ -194,12 +186,8 @@ class OrderController extends Controller
                 ], 404);
             }
 
-            // Vérifier que la commande contient des produits du vendeur
-            $hasVendorProducts = $order->items()->whereHas('product', function ($q) use ($vendorId) {
-                $q->where('vendor_id', $vendorId);
-            })->exists();
-
-            if (!$hasVendorProducts) {
+            // Vérifier que la commande appartient au vendeur
+            if ($order->seller_id !== $seller->id) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Vous n\'avez pas accès à cette commande'
@@ -229,7 +217,15 @@ class OrderController extends Controller
     public function updateTracking(Request $request, $id)
     {
         try {
-            $vendorId = Auth::id();
+            $user = Auth::user();
+            $seller = $user->seller;
+
+            if (!$seller) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Profil vendeur non trouvé'
+                ], 404);
+            }
 
             $request->validate([
                 'tracking_number' => 'required|string|max:255',
@@ -246,12 +242,8 @@ class OrderController extends Controller
                 ], 404);
             }
 
-            // Vérifier que la commande contient des produits du vendeur
-            $hasVendorProducts = $order->items()->whereHas('product', function ($q) use ($vendorId) {
-                $q->where('vendor_id', $vendorId);
-            })->exists();
-
-            if (!$hasVendorProducts) {
+            // Vérifier que la commande appartient au vendeur
+            if ($order->seller_id !== $seller->id) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Vous n\'avez pas accès à cette commande'
@@ -284,7 +276,15 @@ class OrderController extends Controller
     public function addNote(Request $request, $id)
     {
         try {
-            $vendorId = Auth::id();
+            $user = Auth::user();
+            $seller = $user->seller;
+
+            if (!$seller) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Profil vendeur non trouvé'
+                ], 404);
+            }
 
             $request->validate([
                 'note' => 'required|string|max:1000'
@@ -299,12 +299,8 @@ class OrderController extends Controller
                 ], 404);
             }
 
-            // Vérifier que la commande contient des produits du vendeur
-            $hasVendorProducts = $order->items()->whereHas('product', function ($q) use ($vendorId) {
-                $q->where('vendor_id', $vendorId);
-            })->exists();
-
-            if (!$hasVendorProducts) {
+            // Vérifier que la commande appartient au vendeur
+            if ($order->seller_id !== $seller->id) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Vous n\'avez pas accès à cette commande'
@@ -314,7 +310,7 @@ class OrderController extends Controller
             // Ajouter la note aux notes existantes
             $notes = $order->notes ? json_decode($order->notes, true) : [];
             $notes[] = [
-                'vendor_id' => $vendorId,
+                'seller_id' => $seller->id,
                 'note' => $request->note,
                 'created_at' => now()->toDateTimeString()
             ];
@@ -339,22 +335,13 @@ class OrderController extends Controller
     /**
      * Calculer les statistiques des commandes du vendeur
      */
-    private function calculateStats($vendorId)
+    private function calculateStats($sellerId)
     {
-        $orders = Order::whereHas('items.product', function ($q) use ($vendorId) {
-            $q->where('vendor_id', $vendorId);
-        })->with(['items' => function ($q) use ($vendorId) {
-            $q->whereHas('product', function ($query) use ($vendorId) {
-                $query->where('vendor_id', $vendorId);
-            });
-        }])->get();
+        $orders = Order::where('seller_id', $sellerId)
+            ->with('items')
+            ->get();
 
-        $totalRevenue = 0;
-        foreach ($orders as $order) {
-            foreach ($order->items as $item) {
-                $totalRevenue += $item->price * $item->quantity;
-            }
-        }
+        $totalRevenue = $orders->sum('total_amount');
 
         return [
             'total' => $orders->count(),

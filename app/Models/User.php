@@ -5,13 +5,14 @@ namespace App\Models;
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Laravel\Sanctum\HasApiTokens;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use App\Enums\UserRole;
 
 class User extends Authenticatable
 {
-    use HasFactory, Notifiable; use HasApiTokens;
+    use HasFactory, Notifiable, HasApiTokens, SoftDeletes;
 
     /**
      * The attributes that are mass assignable.
@@ -24,7 +25,8 @@ class User extends Authenticatable
         'password',
         'role',
         'phone',
-        'path_photo_profil'
+        'path_photo_profil',
+        'is_active',
     ];
 
     /**
@@ -46,8 +48,9 @@ class User extends Authenticatable
     {
         return [
             'email_verified_at' => 'datetime',
-            'password' => 'hashed',
-            'role' => UserRole::class, 
+            'password'          => 'hashed',
+            'role'              => UserRole::class,
+            'is_active'         => 'boolean',
         ];
     }
 
@@ -84,7 +87,7 @@ class User extends Authenticatable
 
     public function followedSellers()
     {
-        return $this->belongsToMany(Seller::class, 'seller_followers', 'user_id', 'seller_id')
+        return $this->belongsToMany(Seller::class, 'seller_follows', 'user_id', 'seller_id')
                     ->withTimestamps();
     }
 }

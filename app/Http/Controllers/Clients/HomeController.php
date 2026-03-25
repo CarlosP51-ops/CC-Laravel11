@@ -68,9 +68,11 @@ class HomeController extends Controller
     private function getCategories()
     {
         return Category::where('is_active', true)
-            ->whereNull('parent_id') // Seulement les catégories principales
+            ->whereNull('parent_id')
             ->withCount(['products' => function ($query) {
-                $query->where('is_active', true);
+                $query->where('is_active', true)
+                      ->where('status', 'approved')
+                      ->where('stock_quantity', '>', 0);
             }])
             ->orderBy('products_count', 'desc')
             ->limit(8)
@@ -209,9 +211,11 @@ class HomeController extends Controller
     public function categories()
     {
         $categories = Category::where('is_active', true)
-            ->whereNull('parent_id') // Seulement les catégories principales
+            ->whereNull('parent_id')
             ->withCount(['products' => function ($query) {
-                $query->where('is_active', true);
+                $query->where('is_active', true)
+                      ->where('status', 'approved')
+                      ->where('stock_quantity', '>', 0);
             }])
             ->orderBy('order', 'asc')
             ->orderBy('products_count', 'desc')
@@ -265,7 +269,9 @@ class HomeController extends Controller
         $categories = Category::where('is_active', true)
             ->whereNull('parent_id')
             ->withCount(['products' => function ($query) {
-                $query->where('is_active', true);
+                $query->where('is_active', true)
+                      ->where('status', 'approved')
+                      ->where('stock_quantity', '>', 0);
             }])
             ->orderBy('products_count', 'desc')
             ->limit(4)

@@ -11,7 +11,10 @@ class StoreProductRequest extends FormRequest
      */
     public function authorize(): bool
     {
-        return $this->user()->role === 'vendor';
+        $user = $this->user();
+        if (!$user) return false;
+        $role = $user->role instanceof \BackedEnum ? $user->role->value : $user->role;
+        return $role === 'vendor';
     }
 
     /**
@@ -52,7 +55,7 @@ class StoreProductRequest extends FormRequest
             'slug' => 'nullable|string|unique:products,slug',
             
             // Médias
-            'images' => 'required|array|min:1|max:5',
+            'images' => 'nullable|array|max:5',
             'images.*' => 'image|mimes:jpeg,png,jpg,gif|max:2048',
             'featuredImage' => 'nullable|integer|min:0',
             

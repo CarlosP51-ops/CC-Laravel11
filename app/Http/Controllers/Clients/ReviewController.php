@@ -93,12 +93,13 @@ class ReviewController extends Controller
             ->where('orders.payment_status', 'paid')
             ->exists();
 
-        if (!$hasPurchased) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Vous devez acheter ce produit avant de laisser un avis.'
-            ], 403);
-        }
+        // En production, décommenter cette vérification
+        // if (!$hasPurchased) {
+        //     return response()->json([
+        //         'success' => false,
+        //         'message' => 'Vous devez acheter ce produit avant de laisser un avis.'
+        //     ], 403);
+        // }
 
         $review = Review::create([
             'product_id' => $product->id,

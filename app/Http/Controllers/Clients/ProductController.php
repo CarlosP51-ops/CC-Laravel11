@@ -15,9 +15,9 @@ class ProductController extends Controller
      */
     public function index(Request $request)
     {
-        $query = Product::with(['category', 'seller'])
+        $query = Product::with(['category', 'seller', 'images'])
             ->where('is_active', true)
-            ->where('status', 'approved') // Seulement les produits approuvés
+            ->where('status', 'approved')
             ->where('stock_quantity', '>', 0);
 
         // Filtre par catégorie
@@ -105,10 +105,12 @@ class ProductController extends Controller
      */
     private function formatProductCard($product)
     {
-        // Gérer les images (soit array JSON soit relation)
+        // Gérer les images via la relation product_images
         $image = null;
-        if (is_array($product->images) && count($product->images) > 0) {
-            $image = $product->images[0];
+        $primaryImg = $product->images->where('is_primary', true)->first()
+                   ?? $product->images->first();
+        if ($primaryImg) {
+            $image = $primaryImg->image_path;
         }
         
         $discountPercentage = null;
@@ -236,56 +238,52 @@ class ProductController extends Controller
             $discountPercentage = round((($product->compare_at_price - $product->price) / $product->compare_at_price) * 100);
         }
 
-        // Gérer les images
-        $images = [];
-        if (is_array($product->images)) {
-            foreach ($product->images as $index => $imagePath) {
-                $images[] = [
-                    'id' => $index,
-                    'image_path' => $imagePath,
-                    'is_primary' => $index === 0
-                ];
-            }
-        }
+        // Images depuis la relation productImages
+        $images = $product->images->map(fn($img) => [
+            'id'         => $img->id,
+            'image_path' => $img->image_path,
+            'is_primary' => (bool) $img->is_primary,
+        ])->values()->toArray();
+
+        // Stats réelles
+        $salesCount = $product->order_items_count ?? 0;
+        $avgRating  = $product->reviews_avg_rating ? round((float)$product->reviews_avg_rating, 1) : 0;
+        $reviewsCount = $product->reviews_count ?? 0;
 
         return [
-            'id' => $product->id,
-            'name' => $product->name,
-            'slug' => $product->slug,
-            'description' => $product->description,
-            'short_description' => $product->short_description,
-            'price' => (float) $product->price,
-            'compare_at_price' => $product->compare_at_price ? (float) $product->compare_at_price : null,
+            'id'                  => $product->id,
+            'name'                => $product->name,
+            'slug'                => $product->slug,
+            'description'         => $product->description,
+            'short_description'   => $product->short_description,
+            'price'               => (float) $product->price,
+            'compare_at_price'    => $product->compare_at_price ? (float) $product->compare_at_price : null,
             'discount_percentage' => $discountPercentage,
-            'sku' => $product->sku,
-            'stock_quantity' => $product->stock_quantity,
-            'sales_count' => 0,
-            'rating' => 4.5,
-            'reviews_count' => 0,
-            'last_updated' => $product->updated_at->format('Y-m-d'),
-            'is_active' => $product->is_active,
-            'images' => $images,
-            'category' => [
-                'id' => $product->category->id,
+            'sku'                 => $product->sku,
+            'stock_quantity'      => $product->stock_quantity,
+            'is_digital'          => (bool) $product->is_digital,
+            'weight'              => $product->weight,
+            'sales_count'         => $salesCount,
+            'rating'              => $avgRating,
+            'reviews_count'       => $reviewsCount,
+            'last_updated'        => $product->updated_at->format('Y-m-d'),
+            'is_active'           => $product->is_active,
+            'images'              => $images,
+            'tags'                => $product->tags ? array_map('trim', explode(',', $product->tags)) : [],
+            'category'            => [
+                'id'   => $product->category->id,
                 'name' => $product->category->name,
-                'slug' => $product->category->slug
+                'slug' => $product->category->slug ?? '',
             ],
             'seller' => [
-                'id' => $product->seller->id,
-                'store_name' => $product->seller->store_name ?? 'Vendeur',
-                'slug' => $product->seller->slug ?? '',
+                'id'          => $product->seller->id,
+                'user_id'     => $product->seller->user_id,
+                'store_name'  => $product->seller->store_name ?? 'Vendeur',
+                'slug'        => $product->seller->slug ?? '',
                 'is_verified' => $product->seller->is_verified ?? false,
-                'logo' => $product->seller->logo ?? null,
-                'description' => $product->seller->description ?? ''
+                'logo'        => $product->seller->logo ?? null,
             ],
-            'variants' => [],
-            'features' => [
-                'Téléchargement instantané',
-                'Paiement sécurisé',
-                'Garantie 30 jours',
-                'Mises à jour gratuites',
-                'Support prioritaire'
-            ]
+            'variants' => $product->variants ?? [],
         ];
     }
 
@@ -365,20 +363,17 @@ class ProductController extends Controller
         $related = Product::where('category_id', $product->category_id)
             ->where('id', '!=', $product->id)
             ->where('is_active', true)
-            ->where('status', 'approved') // Seulement les produits approuvés
+            ->where('status', 'approved')
             ->where('stock_quantity', '>', 0)
-            ->with(['category', 'seller'])
+            ->with(['category', 'seller', 'images'])
             ->inRandomOrder()
             ->limit($limit)
             ->get();
 
         return $related->map(function ($item) {
-            // Gérer les images
-            $image = null;
-            if (is_array($item->images) && count($item->images) > 0) {
-                $image = $item->images[0];
-            }
-            
+            $primaryImg = $item->images->where('is_primary', true)->first() ?? $item->images->first();
+            $image = $primaryImg ? $primaryImg->image_path : null;
+
             return [
                 'id' => $item->id,
                 'name' => $item->name,

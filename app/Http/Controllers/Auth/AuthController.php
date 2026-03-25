@@ -29,11 +29,12 @@ public function register(RegisterRequest $request)
     try {
         // Créer l'utilisateur
         $user = User::create([
-            'fullname' => $request->name,
-            'email' => $request->email,
-            'password' => Hash::make($request->password),
-            'phone' => $request->phone,
-            'role' => $request->role,
+            'fullname'  => $request->name,
+            'email'     => $request->email,
+            'password'  => Hash::make($request->password),
+            'phone'     => $request->phone,
+            'role'      => $request->role,
+            'is_active' => $request->role === 'vendor' ? false : true,
         ]);
         
         if ($request->role === 'vendor') {
@@ -75,6 +76,7 @@ public function register(RegisterRequest $request)
             'message' => 'Inscription réussie.',
             'user' => new UserResource($user),
             'token' => $token,
+            'pending_activation' => $request->role === 'vendor', // indique au frontend d'afficher le message d'attente
         ], 201);
 
     } catch (\Exception $e) {
@@ -97,6 +99,15 @@ public function register(RegisterRequest $request)
             throw ValidationException::withMessages([
                 'email' => ['Les identifiants fournis sont incorrects.'],
             ]);
+        }
+
+        // Bloquer les vendeurs inactifs (en attente d'activation admin)
+        if (!$user->is_active) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Votre compte est en attente d\'activation par un administrateur. Vous serez notifié par email.',
+                'pending_activation' => true,
+            ], 403);
         }
 
         $user->tokens()->delete(); // Révoquer les anciens tokens

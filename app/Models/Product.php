@@ -20,12 +20,10 @@ class Product extends Model
         'price',
         'compare_at_price',
         'sku',
-        'stock',
-        'stock_quantity', // Garder pour compatibilité
+        'stock_quantity',
         'weight',
         'dimensions',
         'tags',
-        'images',
         'is_active',
         'is_promoted',
         'is_digital',
@@ -42,7 +40,6 @@ class Product extends Model
             'is_active' => 'boolean',
             'is_promoted' => 'boolean',
             'is_digital' => 'boolean',
-            'images' => 'array',
         ];
     }
 
@@ -61,6 +58,12 @@ class Product extends Model
         return $this->belongsTo(Category::class, 'subcategory_id');
     }
 
+    public function productImages()
+    {
+        return $this->hasMany(ProductImage::class);
+    }
+
+    // Alias pour compatibilité avec les controllers existants
     public function images()
     {
         return $this->hasMany(ProductImage::class);
@@ -94,6 +97,6 @@ class Product extends Model
     // Accesseur pour l'image principale
     public function getPrimaryImageAttribute()
     {
-        return $this->images()->where('is_primary', true)->first()?->image_path;
+        return $this->productImages()->where('is_primary', true)->first()?->image_path;
     }
 }
