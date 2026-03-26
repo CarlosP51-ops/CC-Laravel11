@@ -13,20 +13,32 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('orders', function (Blueprint $table) {
-            // Ajouter seller_id pour lier directement au vendeur
-            $table->foreignId('seller_id')->nullable()->after('user_id')->constrained('sellers')->nullOnDelete();
-            
-            // Ajouter les champs de suivi
-            $table->string('tracking_number')->nullable()->after('payment_status');
-            $table->string('carrier')->nullable()->after('tracking_number');
-            $table->string('tracking_url')->nullable()->after('carrier');
-            
-            // Renommer 'total' en 'total_amount' pour cohérence
-            $table->renameColumn('total', 'total_amount');
+            // seller_id — seulement si pas déjà présent
+            if (!Schema::hasColumn('orders', 'seller_id')) {
+                $table->foreignId('seller_id')->nullable()->after('user_id')->constrained('sellers')->nullOnDelete();
+            }
+
+            // Champs de suivi
+            if (!Schema::hasColumn('orders', 'tracking_number')) {
+                $table->string('tracking_number')->nullable()->after('payment_status');
+            }
+            if (!Schema::hasColumn('orders', 'carrier')) {
+                $table->string('carrier')->nullable()->after('tracking_number');
+            }
+            if (!Schema::hasColumn('orders', 'tracking_url')) {
+                $table->string('tracking_url')->nullable()->after('carrier');
+            }
+
+            // Renommer total -> total_amount seulement si total existe encore
+            if (Schema::hasColumn('orders', 'total') && !Schema::hasColumn('orders', 'total_amount')) {
+                $table->renameColumn('total', 'total_amount');
+            }
         });
 
-        // Modifier l'enum status pour ajouter 'processing'
-        DB::statement("ALTER TABLE orders MODIFY COLUMN status ENUM('pending', 'processing', 'paid', 'shipped', 'delivered', 'cancelled') DEFAULT 'pending'");
+        // Modifier l'enum status pour ajouter 'processing' (MySQL uniquement)
+        if (config('database.default') === 'mysql') {
+            DB::statement("ALTER TABLE orders MODIFY COLUMN status ENUM('pending', 'processing', 'paid', 'shipped', 'delivered', 'cancelled') DEFAULT 'pending'");
+        }
     }
 
     /**
