@@ -226,11 +226,10 @@ class UserController extends Controller
             if ($user->seller) {
                 // Gérer logo
                 if ($request->hasFile('logo')) {
-                    $sellerData['logo'] = $request->file('logo')->store('logos', 'public');
+                    $sellerData['logo'] = \App\Services\StorageService::uploadImage($request->file('logo'), 'logos');
                 }
-                // Gérer banner
                 if ($request->hasFile('banner')) {
-                    $sellerData['banner'] = $request->file('banner')->store('banners', 'public');
+                    $sellerData['banner'] = \App\Services\StorageService::uploadImage($request->file('banner'), 'banners');
                 }
                 $user->seller->update($sellerData);
             }

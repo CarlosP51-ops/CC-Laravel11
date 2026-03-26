@@ -194,8 +194,8 @@ class ProductController extends Controller
         $uploadedImages = [];
         if ($request->hasFile('images')) {
             foreach ($request->file('images') as $image) {
-                $path = $image->store('products', 'public');
-                $uploadedImages[] = Storage::url($path);
+                $url = \App\Services\StorageService::uploadImage($image, 'products');
+                $uploadedImages[] = $url;
             }
         }
 
@@ -318,16 +318,15 @@ class ProductController extends Controller
         if ($request->hasFile('images')) {
             // Supprimer les anciennes images
             foreach ($product->productImages as $img) {
-                $path = str_replace('/storage/', '', $img->image_path);
-                Storage::disk('public')->delete($path);
+                \App\Services\StorageService::delete($img->image_path);
                 $img->delete();
             }
             // Upload nouvelles images
             $featuredIdx = (int) $request->input('featuredImage', 0);
             foreach ($request->file('images') as $i => $image) {
-                $path = $image->store('products', 'public');
+                $url = \App\Services\StorageService::uploadImage($image, 'products');
                 $product->productImages()->create([
-                    'image_path' => Storage::url($path),
+                    'image_path' => $url,
                     'is_primary' => $i === $featuredIdx,
                     'order' => $i,
                 ]);

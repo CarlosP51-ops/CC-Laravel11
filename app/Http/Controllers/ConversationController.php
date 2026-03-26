@@ -192,11 +192,11 @@ class ConversationController extends Controller
         // Upload des fichiers
         if ($request->hasFile('attachments')) {
             foreach ($request->file('attachments') as $file) {
-                $path = $file->store('messages/' . date('Y/m'), 'public');
+                $uploaded = \App\Services\StorageService::uploadFile($file, 'messages/' . date('Y/m'));
                 MessageAttachment::create([
                     'message_id'    => $message->id,
                     'original_name' => $file->getClientOriginalName(),
-                    'stored_path'   => $path,
+                    'stored_path'   => $uploaded['path'],
                     'mime_type'     => $file->getMimeType(),
                     'size'          => $file->getSize(),
                 ]);
