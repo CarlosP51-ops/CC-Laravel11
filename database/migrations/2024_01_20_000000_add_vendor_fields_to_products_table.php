@@ -11,6 +11,11 @@ return new class extends Migration
      */
     public function up(): void
     {
+        // Si la table products n'existe pas encore, on skip
+        if (!Schema::hasTable('products')) {
+            return;
+        }
+
         Schema::table('products', function (Blueprint $table) {
             // Ajouter les champs manquants si ils n'existent pas déjà
             if (!Schema::hasColumn('products', 'status')) {
