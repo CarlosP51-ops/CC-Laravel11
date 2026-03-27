@@ -10,55 +10,22 @@ use App\Models\User;
 use App\Models\Order;
 use App\Models\NewsletterSubscription;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Schema;
 
 class HomeController extends Controller
 {
-    // Vérifie une fois si la colonne status existe
-    private function hasStatusColumn(): bool
-    {
-        static $has = null;
-        if ($has === null) {
-            $has = Schema::hasColumn('products', 'status');
-        }
-        return $has;
-    }
-
-    private function hasIsDigitalColumn(): bool
-    {
-        static $has = null;
-        if ($has === null) {
-            $has = Schema::hasColumn('products', 'is_digital');
-        }
-        return $has;
-    }
-
-    private function applyProductFilters($query)
-    {
-        $query->where('is_active', true);
-        if ($this->hasStatusColumn()) {
-            $query->where('status', 'approved');
-        }
-        $query->where(function ($q) {
-            $q->where('is_digital', true)->orWhere('stock_quantity', '>', 0);
-        });
-        return $query;
-    }
-
     public function index()
     {
         try {
             Cache::forget('home_page_data');
             $data = Cache::remember('home_page_data', 3600, function () {
                 return [
-                    'hero_stats'       => $this->getHeroStats(),
-                    'categories'       => $this->getCategories(),
-                    'featured_products'=> $this->getFeaturedProducts(),
-                    'new_products'     => $this->getNewProducts(),
-                    'best_sellers'     => $this->getBestSellers(),
-                    'platform_stats'   => $this->getPlatformStats()
+                    'hero_stats'        => $this->getHeroStats(),
+                    'categories'        => $this->getCategories(),
+                    'featured_products' => $this->getFeaturedProducts(),
+                    'new_products'      => $this->getNewProducts(),
+                    'best_sellers'      => $this->getBestSellers(),
+                    'platform_stats'    => $this->getPlatformStats(),
                 ];
             });
 
@@ -68,7 +35,7 @@ class HomeController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Erreur lors du chargement de la page d\'accueil',
-                'error'   => $e->getMessage()
+                'error'   => $e->getMessage(),
             ], 500);
         }
     }
@@ -76,28 +43,23 @@ class HomeController extends Controller
     private function getHeroStats()
     {
         return [
-            'total_products'   => Product::where('is_active', true)->count(),
-            'total_sellers'    => Seller::where('is_active', true)->count(),
-            'satisfaction_rate'=> 98,
-            'total_users'      => User::where('role', 'client')->count()
+            'total_products'    => Product::where('is_active', true)->count(),
+            'total_sellers'     => Seller::where('is_active', true)->count(),
+            'satisfaction_rate' => 98,
+            'total_users'       => User::where('role', 'client')->count(),
         ];
     }
 
     private function getCategories()
     {
-        $hasStatus    = $this->hasStatusColumn();
-        $hasIsDigital = $this->hasIsDigitalColumn();
-
         return Category::where('is_active', true)
             ->whereNull('parent_id')
-            ->withCount(['products' => function ($query) use ($hasStatus, $hasIsDigital) {
-                $query->where('is_active', true);
-                if ($hasStatus)    $query->where('status', 'approved');
-                if ($hasIsDigital) {
-                    $query->where(function ($q) { $q->where('is_digital', true)->orWhere('stock_quantity', '>', 0); });
-                } else {
-                    $query->where('stock_quantity', '>', 0);
-                }
+            ->withCount(['products' => function ($q) {
+                $q->where('is_active', true)
+                  ->where('status', 'approved')
+                  ->where(function ($q) {
+                      $q->where('is_digital', true)->orWhere('stock_quantity', '>', 0);
+                  });
             }])
             ->orderBy('products_count', 'desc')
             ->limit(8)
@@ -113,41 +75,38 @@ class HomeController extends Controller
 
     private function getFeaturedProducts()
     {
-        $q = Product::with(['category', 'seller', 'images' => fn($q) => $q->where('is_primary', true)])
-            ->where('is_active', true);
-        if ($this->hasStatusColumn())    $q->where('status', 'approved');
-        if ($this->hasIsDigitalColumn()) {
-            $q->where(function ($q) { $q->where('is_digital', true)->orWhere('stock_quantity', '>', 0); });
-        } else {
-            $q->where('stock_quantity', '>', 0);
-        }
-        return $q->orderBy('created_at', 'desc')->limit(8)->get()->map(fn($p) => $this->formatProduct($p));
+        return Product::with(['category', 'seller', 'images' => fn($q) => $q->where('is_primary', true)])
+            ->where('is_active', true)
+            ->where('status', 'approved')
+            ->where(function ($q) { $q->where('is_digital', true)->orWhere('stock_quantity', '>', 0); })
+            ->orderBy('created_at', 'desc')
+            ->limit(8)
+            ->get()
+            ->map(fn($p) => $this->formatProduct($p));
     }
 
     private function getNewProducts()
     {
-        $q = Product::with(['category', 'seller', 'images' => fn($q) => $q->where('is_primary', true)])
-            ->where('is_active', true);
-        if ($this->hasStatusColumn())    $q->where('status', 'approved');
-        if ($this->hasIsDigitalColumn()) {
-            $q->where(function ($q) { $q->where('is_digital', true)->orWhere('stock_quantity', '>', 0); });
-        } else {
-            $q->where('stock_quantity', '>', 0);
-        }
-        return $q->orderBy('created_at', 'desc')->limit(8)->get()->map(fn($p) => $this->formatProduct($p));
+        return Product::with(['category', 'seller', 'images' => fn($q) => $q->where('is_primary', true)])
+            ->where('is_active', true)
+            ->where('status', 'approved')
+            ->where(function ($q) { $q->where('is_digital', true)->orWhere('stock_quantity', '>', 0); })
+            ->orderBy('created_at', 'desc')
+            ->limit(8)
+            ->get()
+            ->map(fn($p) => $this->formatProduct($p));
     }
 
     private function getBestSellers()
     {
-        $q = Product::with(['category', 'seller', 'images' => fn($q) => $q->where('is_primary', true)])
-            ->where('is_active', true);
-        if ($this->hasStatusColumn())    $q->where('status', 'approved');
-        if ($this->hasIsDigitalColumn()) {
-            $q->where(function ($q) { $q->where('is_digital', true)->orWhere('stock_quantity', '>', 0); });
-        } else {
-            $q->where('stock_quantity', '>', 0);
-        }
-        return $q->orderBy('created_at', 'desc')->limit(8)->get()->map(fn($p) => $this->formatProduct($p));
+        return Product::with(['category', 'seller', 'images' => fn($q) => $q->where('is_primary', true)])
+            ->where('is_active', true)
+            ->where('status', 'approved')
+            ->where(function ($q) { $q->where('is_digital', true)->orWhere('stock_quantity', '>', 0); })
+            ->orderBy('created_at', 'desc')
+            ->limit(8)
+            ->get()
+            ->map(fn($p) => $this->formatProduct($p));
     }
 
     private function getPlatformStats()
@@ -160,7 +119,7 @@ class HomeController extends Controller
                 'support_hours'    => '24/7',
                 'countries_served' => 50,
                 'total_sales'      => Order::where('payment_status', 'paid')->sum('total_amount') ?? 0,
-                'verified_sellers' => Seller::where('is_verified', true)->where('is_active', true)->count()
+                'verified_sellers' => Seller::where('is_verified', true)->where('is_active', true)->count(),
             ];
         } catch (\Exception $e) {
             return ['monthly_transactions' => 0, 'average_rating' => 4.5, 'support_hours' => '24/7',
@@ -190,30 +149,26 @@ class HomeController extends Controller
                 'slug' => $product->category->slug,
             ] : null,
             'seller' => $product->seller ? [
-                'id'         => $product->seller->id,
-                'user_id'    => $product->seller->user_id,
-                'store_name' => $product->seller->store_name ?? 'Vendeur',
-                'slug'       => $product->seller->slug ?? '',
-                'is_verified'=> $product->seller->is_verified ?? false,
-                'logo'       => $product->seller->logo ?? null,
+                'id'          => $product->seller->id,
+                'user_id'     => $product->seller->user_id,
+                'store_name'  => $product->seller->store_name ?? 'Vendeur',
+                'slug'        => $product->seller->slug ?? '',
+                'is_verified' => $product->seller->is_verified ?? false,
+                'logo'        => $product->seller->logo ?? null,
             ] : null,
         ];
     }
 
     public function categories()
     {
-        $hasStatus    = $this->hasStatusColumn();
-        $hasIsDigital = $this->hasIsDigitalColumn();
         $categories = Category::where('is_active', true)
             ->whereNull('parent_id')
-            ->withCount(['products' => function ($query) use ($hasStatus, $hasIsDigital) {
-                $query->where('is_active', true);
-                if ($hasStatus) $query->where('status', 'approved');
-                if ($hasIsDigital) {
-                    $query->where(function ($q) { $q->where('is_digital', true)->orWhere('stock_quantity', '>', 0); });
-                } else {
-                    $query->where('stock_quantity', '>', 0);
-                }
+            ->withCount(['products' => function ($q) {
+                $q->where('is_active', true)
+                  ->where('status', 'approved')
+                  ->where(function ($q) {
+                      $q->where('is_digital', true)->orWhere('stock_quantity', '>', 0);
+                  });
             }])
             ->orderBy('products_count', 'desc')
             ->get()
@@ -230,29 +185,21 @@ class HomeController extends Controller
 
     public function subscribeNewsletter(Request $request)
     {
-        $request->validate([
-            'email' => 'required|email|unique:newsletter_subscriptions,email'
-        ]);
-
+        $request->validate(['email' => 'required|email|unique:newsletter_subscriptions,email']);
         NewsletterSubscription::create(['email' => $request->email, 'is_active' => true, 'subscribed_at' => now()]);
-
         return response()->json(['success' => true, 'message' => 'Inscription réussie !']);
     }
 
     public function popularCategories()
     {
-        $hasStatus    = $this->hasStatusColumn();
-        $hasIsDigital = $this->hasIsDigitalColumn();
         $categories = Category::where('is_active', true)
             ->whereNull('parent_id')
-            ->withCount(['products' => function ($query) use ($hasStatus, $hasIsDigital) {
-                $query->where('is_active', true);
-                if ($hasStatus) $query->where('status', 'approved');
-                if ($hasIsDigital) {
-                    $query->where(function ($q) { $q->where('is_digital', true)->orWhere('stock_quantity', '>', 0); });
-                } else {
-                    $query->where('stock_quantity', '>', 0);
-                }
+            ->withCount(['products' => function ($q) {
+                $q->where('is_active', true)
+                  ->where('status', 'approved')
+                  ->where(function ($q) {
+                      $q->where('is_digital', true)->orWhere('stock_quantity', '>', 0);
+                  });
             }])
             ->orderBy('products_count', 'desc')
             ->limit(4)
@@ -270,22 +217,22 @@ class HomeController extends Controller
 
     public function trendingProducts()
     {
-        $q = Product::with(['category', 'seller', 'images' => fn($q) => $q->where('is_primary', true)])
-            ->where('is_active', true);
-        if ($this->hasStatusColumn())    $q->where('status', 'approved');
-        if ($this->hasIsDigitalColumn()) {
-            $q->where(function ($q) { $q->where('is_digital', true)->orWhere('stock_quantity', '>', 0); });
-        } else {
-            $q->where('stock_quantity', '>', 0);
-        }
-        $products = $q->orderBy('created_at', 'desc')->limit(3)->get()->map(fn($p) => $this->formatProduct($p));
+        $products = Product::with(['category', 'seller', 'images' => fn($q) => $q->where('is_primary', true)])
+            ->where('is_active', true)
+            ->where('status', 'approved')
+            ->where(function ($q) { $q->where('is_digital', true)->orWhere('stock_quantity', '>', 0); })
+            ->orderBy('created_at', 'desc')
+            ->limit(3)
+            ->get()
+            ->map(fn($p) => $this->formatProduct($p));
+
         return response()->json(['success' => true, 'data' => $products]);
     }
 
-    private function getCategoryIcon($categoryName)
+    private function getCategoryIcon($name)
     {
         $icons = ['Électronique' => 'Laptop', 'Mode' => 'Shirt', 'Maison' => 'Home',
                   'Sport' => 'Dumbbell', 'Livres' => 'Book', 'Jouets' => 'Gamepad2'];
-        return $icons[$categoryName] ?? 'Package';
+        return $icons[$name] ?? 'Package';
     }
 }
