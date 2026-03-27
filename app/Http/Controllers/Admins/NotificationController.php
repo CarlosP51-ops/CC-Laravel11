@@ -14,33 +14,43 @@ class NotificationController extends Controller
     // ── GET /admin/notifications ──────────────────────────────────────────────
     public function index(Request $request)
     {
-        // Synchronise les nouvelles notifications depuis les données réelles
-        $this->service->sync();
-
-        $query = AdminNotification::latest();
-
-        // Filtre non-lues uniquement
-        if ($request->boolean('unread_only')) {
-            $query->unread();
+        try {
+            // Synchronise les nouvelles notifications depuis les données réelles
+            $this->service->sync();
+        } catch (\Exception $e) {
+            // Si sync échoue (colonnes manquantes), on continue sans sync
+            \Log::warning('Notification sync failed: ' . $e->getMessage());
         }
 
-        // Filtre par type
-        if ($type = $request->input('type')) {
-            $query->where('type', $type);
+        try {
+            $query = AdminNotification::latest();
+
+            if ($request->boolean('unread_only')) {
+                $query->unread();
+            }
+
+            if ($type = $request->input('type')) {
+                $query->where('type', $type);
+            }
+
+            $limit         = min((int) $request->input('limit', 30), 100);
+            $notifications = $query->limit($limit)->get();
+            $unreadCount   = AdminNotification::unread()->count();
+
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'notifications' => $notifications->map(fn($n) => $this->format($n)),
+                    'unread_count'  => $unreadCount,
+                    'total'         => $notifications->count(),
+                ],
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => true,
+                'data' => ['notifications' => [], 'unread_count' => 0, 'total' => 0],
+            ]);
         }
-
-        $limit         = min((int) $request->input('limit', 30), 100);
-        $notifications = $query->limit($limit)->get();
-        $unreadCount   = AdminNotification::unread()->count();
-
-        return response()->json([
-            'success' => true,
-            'data' => [
-                'notifications' => $notifications->map(fn($n) => $this->format($n)),
-                'unread_count'  => $unreadCount,
-                'total'         => $notifications->count(),
-            ],
-        ]);
     }
 
     // ── PATCH /admin/notifications/{id}/read ─────────────────────────────────

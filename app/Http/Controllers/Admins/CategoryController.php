@@ -14,73 +14,81 @@ class CategoryController extends Controller
 
     public function index(Request $request)
     {
-        $query = Category::withCount('products')
-            ->with('parent:id,name')
-            ->orderBy('order')
-            ->orderBy('name');
+        try {
+            $query = Category::withCount('products')
+                ->with('parent:id,name')
+                ->orderBy('order')
+                ->orderBy('name');
 
-        if ($request->search) {
-            $search = $request->search;
-            $query->where(function ($q) use ($search) {
-                $q->where('name', 'like', "%$search%")
-                  ->orWhere('slug', 'like', "%$search%")
-                  ->orWhere('description', 'like', "%$search%");
-            });
+            if ($request->search) {
+                $search = $request->search;
+                $query->where(function ($q) use ($search) {
+                    $q->where('name', 'like', "%$search%")
+                      ->orWhere('slug', 'like', "%$search%")
+                      ->orWhere('description', 'like', "%$search%");
+                });
+            }
+
+            if ($request->status && $request->status !== 'all') {
+                $query->where('is_active', $request->status === 'active');
+            }
+
+            if ($request->parent_id !== null) {
+                $query->where('parent_id', $request->parent_id ?: null);
+            }
+
+            $categories = $query->paginate($request->per_page ?? 20);
+
+            return response()->json([
+                'success' => true,
+                'data' => $categories->map(fn($c) => $this->formatCategory($c)),
+                'meta' => [
+                    'total'        => $categories->total(),
+                    'per_page'     => $categories->perPage(),
+                    'current_page' => $categories->currentPage(),
+                    'last_page'    => $categories->lastPage(),
+                ]
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
         }
-
-        if ($request->status && $request->status !== 'all') {
-            $query->where('is_active', $request->status === 'active');
-        }
-
-        if ($request->parent_id !== null) {
-            $query->where('parent_id', $request->parent_id ?: null);
-        }
-
-        $categories = $query->paginate($request->per_page ?? 20);
-
-        return response()->json([
-            'success' => true,
-            'data' => $categories->map(fn($c) => $this->formatCategory($c)),
-            'meta' => [
-                'total' => $categories->total(),
-                'per_page' => $categories->perPage(),
-                'current_page' => $categories->currentPage(),
-                'last_page' => $categories->lastPage(),
-            ]
-        ]);
     }
 
     // ─── STATS ────────────────────────────────────────────────────────────────
 
     public function stats()
     {
-        $total = Category::count();
-        $active = Category::where('is_active', true)->count();
-        $inactive = Category::where('is_active', false)->count();
-        $roots = Category::whereNull('parent_id')->count();
-        $withProducts = Category::has('products')->count();
+        try {
+            $total = Category::count();
+            $active = Category::where('is_active', true)->count();
+            $inactive = Category::where('is_active', false)->count();
+            $roots = Category::whereNull('parent_id')->count();
+            $withProducts = Category::has('products')->count();
 
-        $topCategory = Category::withCount('products')
-            ->orderByDesc('products_count')
-            ->first();
+            $topCategory = Category::withCount('products')
+                ->orderByDesc('products_count')
+                ->first();
 
-        $totalProducts = DB::table('products')->count();
-        $avgPerCategory = $total > 0 ? round($totalProducts / $total) : 0;
+            $totalProducts = DB::table('products')->count();
+            $avgPerCategory = $total > 0 ? round($totalProducts / $total) : 0;
 
-        return response()->json([
-            'success' => true,
-            'data' => [
-                'total_categories' => $total,
-                'active_categories' => $active,
-                'inactive_categories' => $inactive,
-                'root_categories' => $roots,
-                'with_products' => $withProducts,
-                'total_products' => $totalProducts,
-                'average_products_per_category' => $avgPerCategory,
-                'top_category' => $topCategory?->name ?? '—',
-                'top_category_products' => $topCategory?->products_count ?? 0,
-            ]
-        ]);
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'total_categories'               => $total,
+                    'active_categories'              => $active,
+                    'inactive_categories'            => $inactive,
+                    'root_categories'                => $roots,
+                    'with_products'                  => $withProducts,
+                    'total_products'                 => $totalProducts,
+                    'average_products_per_category'  => $avgPerCategory,
+                    'top_category'                   => $topCategory?->name ?? '—',
+                    'top_category_products'          => $topCategory?->products_count ?? 0,
+                ]
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
+        }
     }
 
     // ─── SHOW ─────────────────────────────────────────────────────────────────
@@ -213,14 +221,18 @@ class CategoryController extends Controller
 
     public function tree()
     {
-        $categories = Category::withCount('products')
-            ->orderBy('order')
-            ->orderBy('name')
-            ->get();
+        try {
+            $categories = Category::withCount('products')
+                ->orderBy('order')
+                ->orderBy('name')
+                ->get();
 
-        $tree = $this->buildTree($categories);
+            $tree = $this->buildTree($categories);
 
-        return response()->json(['success' => true, 'data' => $tree]);
+            return response()->json(['success' => true, 'data' => $tree]);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
+        }
     }
 
     // ─── HELPERS ─────────────────────────────────────────────────────────────
