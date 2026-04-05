@@ -109,6 +109,9 @@ class ReviewController extends Controller
             'helpful_count' => 0
         ]);
 
+        // Notifier le vendeur
+        \App\Services\NotificationService::onNewReview($product->id, $request->rating, auth()->id());
+
         return response()->json([
             'success' => true,
             'message' => 'Votre avis a été publié avec succès.',
@@ -165,6 +168,8 @@ class ReviewController extends Controller
             'details' => 'nullable|string|max:500'
         ]);
 
+        $review->load('product');
+
         // Check if user already reported this review
         $alreadyReported = DB::table('review_reports')
             ->where('review_id', $review->id)
@@ -185,6 +190,18 @@ class ReviewController extends Controller
             'reason' => $request->reason,
             'details' => $request->details,
             'created_at' => now()
+        ]);
+
+        // Notifier l'admin du signalement
+        \App\Models\AdminNotification::createUnique([
+            'type'        => 'product_reported',
+            'title'       => 'Avis signalé',
+            'subtitle'    => 'Raison : ' . $request->reason,
+            'body'        => 'Un avis sur "' . ($review->product?->name ?? 'Produit') . '" a été signalé par un utilisateur.',
+            'link'        => '/admin/performance?tab=alerts',
+            'entity_type' => 'review',
+            'entity_id'   => $review->id,
+            'meta'        => ['reason' => $request->reason, 'product' => $review->product?->name],
         ]);
 
         return response()->json([

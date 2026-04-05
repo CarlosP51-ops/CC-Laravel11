@@ -23,6 +23,8 @@ use App\Http\Controllers\Vendors\PaymentController as VendorPaymentController;
 use App\Http\Controllers\Vendors\ClientController as VendorClientController;
 use App\Http\Controllers\Vendors\ReportController as VendorReportController;
 use App\Http\Controllers\Vendors\MessageController as VendorMessageController;
+use App\Http\Controllers\Vendors\NotificationController as VendorNotificationController;
+use App\Http\Controllers\Admins\NewsletterController as AdminNewsletterController;
 use App\Http\Controllers\Admins\DashboardController as AdminDashboardController;
 use App\Http\Controllers\Admins\UserController as AdminUserController;
 use App\Http\Controllers\Admins\SellerController as AdminSellerController;
@@ -184,6 +186,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::prefix('clients')->group(function () {
             Route::get('/', [VendorClientController::class, 'index']);
             Route::get('/stats', [VendorClientController::class, 'stats']);
+            Route::post('/newsletter', [VendorClientController::class, 'sendNewsletter']);
             Route::get('/{id}', [VendorClientController::class, 'show']);
         });
 
@@ -202,6 +205,15 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::get('/stats', [VendorMessageController::class, 'stats']);
             Route::get('/thread', [VendorMessageController::class, 'thread']);
             Route::post('/send', [VendorMessageController::class, 'send']);
+        });
+
+        // Notifications vendeur
+        Route::prefix('notifications')->group(function () {
+            Route::get('/', [VendorNotificationController::class, 'index']);
+            Route::get('/unread-count', [VendorNotificationController::class, 'unreadCount']);
+            Route::post('/read-all', [VendorNotificationController::class, 'markAllRead']);
+            Route::patch('/{id}/read', [VendorNotificationController::class, 'markRead']);
+            Route::delete('/{id}', [VendorNotificationController::class, 'destroy']);
         });
     });
 
@@ -286,7 +298,7 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::get('/export', [AdminReportController::class, 'export']);
         });
 
-        // Notifications
+        // Notifications admin
         Route::prefix('notifications')->group(function () {
             Route::get('/', [AdminNotificationController::class, 'index']);
             Route::get('/stats', [AdminNotificationController::class, 'stats']);
@@ -294,6 +306,12 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::post('/read-all', [AdminNotificationController::class, 'markAllRead']);
             Route::delete('/clear-read', [AdminNotificationController::class, 'clearRead']);
             Route::delete('/{id}', [AdminNotificationController::class, 'destroy']);
+        });
+
+        // Newsletter admin
+        Route::prefix('newsletter')->group(function () {
+            Route::post('/send', [AdminNewsletterController::class, 'send']);
+            Route::get('/preview', [AdminNewsletterController::class, 'preview']);
         });
 
         // Payments

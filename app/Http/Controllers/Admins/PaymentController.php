@@ -119,6 +119,15 @@ class PaymentController extends Controller
             'notes' => 'Approuvé par l\'admin',
         ]);
 
+        // Notifier le vendeur
+        if ($withdrawal->seller?->user_id) {
+            \App\Services\NotificationService::onWithdrawalApproved(
+                $withdrawal->seller->user_id,
+                $withdrawal->amount,
+                $withdrawal->reference
+            );
+        }
+
         return response()->json([
             'success' => true,
             'message' => 'Retrait approuvé',
@@ -143,6 +152,16 @@ class PaymentController extends Controller
             'processed_at' => now(),
             'rejection_reason' => $request->reason,
         ]);
+
+        // Notifier le vendeur
+        if ($withdrawal->seller?->user_id) {
+            \App\Services\NotificationService::onWithdrawalRejected(
+                $withdrawal->seller->user_id,
+                $withdrawal->amount,
+                $withdrawal->reference,
+                $request->reason
+            );
+        }
 
         return response()->json([
             'success' => true,

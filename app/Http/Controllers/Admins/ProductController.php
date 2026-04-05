@@ -152,9 +152,12 @@ class ProductController extends Controller
         $product->is_active = $validated['action'] === 'approve';
         $product->save();
 
-        // Notifier les abonnés du vendeur si le produit est approuvé
-        if ($validated['action'] === 'approve' && $product->seller) {
-            \App\Services\NotificationService::notifyNewProduct($product, $product->seller);
+        if ($product->seller) {
+            if ($validated['action'] === 'approve') {
+                \App\Services\NotificationService::onProductApproved($product, $product->seller);
+            } else {
+                \App\Services\NotificationService::onProductRejected($product, $product->seller, $validated['reason'] ?? null);
+            }
         }
 
         return response()->json([

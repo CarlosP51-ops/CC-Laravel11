@@ -215,6 +215,9 @@ class ConversationController extends Controller
 
         broadcast(new MessageSent($message, $recipientId))->toOthers();
 
+        // Notif in-app au destinataire
+        \App\Services\NotificationService::onNewMessage($recipientId, Auth::user()->fullname, Auth::user()->role);
+
         return response()->json([
             'success' => true,
             'data'    => $this->formatMessage($message, $userId),

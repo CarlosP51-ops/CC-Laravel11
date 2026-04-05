@@ -9,6 +9,7 @@ use App\Models\OrderItem;
 use App\Models\Payment;
 use App\Models\Product;
 use App\Models\ProductVariant;
+use App\Services\NotificationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -31,7 +32,7 @@ class OrderController extends Controller
             DB::beginTransaction();
 
             $cart = Cart::where('user_id', auth()->id())
-                ->with(['items.product', 'items.variant'])
+                ->with(['items.product.seller', 'items.variant'])
                 ->firstOrFail();
 
             if ($cart->items->isEmpty()) {
@@ -99,8 +100,18 @@ class OrderController extends Controller
                 if (!$product->is_digital) {
                     if ($variant) {
                         $variant->decrement('stock_quantity', $cartItem->quantity);
+                        // Vérifier stock faible après décrément
+                        $variant->refresh();
+                        if ($variant->stock_quantity <= 5 && $product->seller) {
+                            NotificationService::onLowStock($product, $product->seller, $variant->stock_quantity);
+                        }
                     } else {
                         $product->decrement('stock_quantity', $cartItem->quantity);
+                        // Vérifier stock faible après décrément
+                        $product->refresh();
+                        if ($product->stock_quantity <= 5 && $product->seller) {
+                            NotificationService::onLowStock($product, $product->seller, $product->stock_quantity);
+                        }
                     }
                 }
             }
@@ -147,6 +158,9 @@ class OrderController extends Controller
                     'message' => 'Le paiement a échoué. Veuillez réessayer.',
                 ], 402);
             }
+
+            // Déclencher les notifications
+            NotificationService::onOrderCreated($order->fresh());
 
             return response()->json([
                 'success' => true,

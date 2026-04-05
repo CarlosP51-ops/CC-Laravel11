@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Vendors;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Mail;
 use App\Models\User;
 use App\Models\Order;
 use Illuminate\Support\Facades\DB;
@@ -208,6 +209,41 @@ class ClientController extends Controller
                 'active_clients' => $activeClients,
                 'average_client_value' => $averageClientValue ?? 0,
             ]
+        ]);
+    }
+
+    /**
+     * Envoyer une newsletter à tous les clients du vendeur
+     */
+    public function sendNewsletter(Request $request)
+    {
+        $user = Auth::user();
+        $seller = $user->seller;
+
+        if (!$seller) {
+            return response()->json(['success' => false, 'message' => 'Profil vendeur non trouvé'], 404);
+        }
+
+        $request->validate([
+            'subject' => 'required|string|max:255',
+            'message' => 'required|string',
+        ]);
+
+        $clients = User::whereHas('orders', function($q) use ($seller) {
+            $q->where('seller_id', $seller->id);
+        })->get(['id', 'fullname', 'email']);
+
+        if ($clients->isEmpty()) {
+            return response()->json(['success' => false, 'message' => 'Aucun client à contacter'], 400);
+        }
+
+        // Déléguer au NotificationService (email + notif in-app)
+        $result = \App\Services\NotificationService::vendorNewsletter($seller, $request->subject, $request->message);
+
+        return response()->json([
+            'success' => true,
+            'message' => "Newsletter envoyée à {$result['sent']} client(s)" . ($result['failed'] > 0 ? ", {$result['failed']} échec(s)" : ""),
+            'data' => $result,
         ]);
     }
 }

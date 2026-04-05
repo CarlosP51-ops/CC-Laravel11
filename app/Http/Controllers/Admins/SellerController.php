@@ -135,6 +135,9 @@ class SellerController extends Controller
             $seller->user->save();
         }
 
+        // Notifier le vendeur
+        \App\Services\NotificationService::onSellerStatusChanged($seller->user_id, $seller->is_active);
+
         return response()->json([
             'success' => true,
             'message' => $seller->is_active ? 'Boutique activée.' : 'Boutique désactivée.',

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Vendors;
 use App\Http\Controllers\Controller;
 use App\Models\Order;
 use App\Models\OrderItem;
+use App\Services\NotificationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -197,6 +198,9 @@ class OrderController extends Controller
             $order->status = $request->status;
             $order->save();
 
+            // Notifier le client du changement de statut
+            NotificationService::onOrderStatusChanged($order, $request->status);
+
             return response()->json([
                 'success' => true,
                 'message' => 'Statut de la commande mis à jour avec succès',
@@ -253,8 +257,11 @@ class OrderController extends Controller
             $order->tracking_number = $request->tracking_number;
             $order->carrier = $request->carrier;
             $order->tracking_url = $request->tracking_url;
-            $order->status = 'shipped'; // Mettre automatiquement en "expédié"
+            $order->status = 'shipped';
             $order->save();
+
+            // Notifier le client
+            NotificationService::onOrderStatusChanged($order, 'shipped');
 
             return response()->json([
                 'success' => true,
