@@ -1,6 +1,7 @@
 <?php
 
 
+use App\Http\Controllers\Clients\DigitalDownloadController;
 use App\Http\Controllers\Clients\FollowController;
 use App\Http\Controllers\Clients\ClientNotificationController;
 use App\Http\Controllers\Clients\SellerProfileController;
@@ -105,6 +106,9 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/', [OrderController::class, 'index']);
         Route::post('/', [OrderController::class, 'store']);
         Route::get('/{id}', [OrderController::class, 'show']);
+        // Téléchargement produits digitaux
+        Route::get('/{orderId}/download/{productId}', [DigitalDownloadController::class, 'download']);
+        Route::get('/{orderId}/download/{productId}/check', [DigitalDownloadController::class, 'check']);
     });
 
     // Payment Routes (protected)

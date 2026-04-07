@@ -224,15 +224,24 @@ class ProductController extends Controller
             'compare_at_price' => $request->comparePrice,
             'category_id' => $request->category,
             'subcategory_id' => $request->subcategory,
-            'stock_quantity' => $request->stock,
+            'stock_quantity' => $request->boolean('is_digital') ? 9999 : $request->stock,
             'sku' => $sku,
-            'weight' => $request->weight,
+            'weight' => $request->boolean('is_digital') ? null : $request->weight,
             'dimensions' => $dimensions,
             'tags' => $request->tags ? implode(',', $request->tags) : null,
             'is_digital' => $request->boolean('is_digital'),
             'status' => 'pending',
             'is_active' => false,
         ]);
+
+        // Upload du fichier numérique (stocké en privé)
+        if ($request->boolean('is_digital') && $request->hasFile('digital_file')) {
+            $digitalPath = $request->file('digital_file')->store(
+                'digital-products/' . $seller->id,
+                'private'
+            );
+            $product->update(['digital_file_path' => $digitalPath]);
+        }
 
         // Insérer les images dans product_images
         $featuredIdx = (int) $request->input('featuredImage', 0);
@@ -298,7 +307,7 @@ class ProductController extends Controller
             'images' => 'nullable|array|max:5',
             'images.*' => 'image|mimes:jpeg,png,jpg,gif|max:2048',
             'is_digital' => 'boolean',
-            'digital_file' => 'nullable|file|max:10240',
+            'digital_file' => 'nullable|file|max:51200',
         ]);
 
         // Générer nouveau slug si le nom a changé
@@ -352,9 +361,9 @@ class ProductController extends Controller
             'compare_at_price' => $request->compare_at_price,
             'category_id' => $request->category_id,
             'subcategory_id' => $request->subcategory_id,
-            'stock_quantity' => $request->stock,
+            'stock_quantity' => $request->boolean('is_digital') ? 9999 : $request->stock,
             'sku' => $request->sku ?: $product->sku,
-            'weight' => $request->weight,
+            'weight' => $request->boolean('is_digital') ? null : $request->weight,
             'dimensions' => $request->dimensions,
             'tags' => $request->tags,
             'is_digital' => $request->boolean('is_digital'),

@@ -33,7 +33,7 @@ class StoreProductRequest extends FormRequest
             'price' => 'required|numeric|min:0',
             'comparePrice' => 'nullable|numeric|min:0|gt:price',
             'costPerItem' => 'nullable|numeric|min:0',
-            'stock' => 'required|integer|min:0',
+            'stock' => 'nullable|integer|min:0',
             'lowStockThreshold' => 'nullable|integer|min:0',
             
             // Catégorie
@@ -58,6 +58,10 @@ class StoreProductRequest extends FormRequest
             'images' => 'nullable|array|max:5',
             'images.*' => 'image|mimes:jpeg,png,jpg,gif|max:2048',
             'featuredImage' => 'nullable|integer|min:0',
+
+            // Produit digital
+            'is_digital' => 'nullable|boolean',
+            'digital_file' => 'nullable|file|max:51200', // 50 Mo max
             
             // Métadonnées
             'status' => 'nullable|in:draft,active,archived',
