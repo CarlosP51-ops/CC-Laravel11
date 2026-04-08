@@ -7,6 +7,7 @@ use App\Models\Seller;
 use App\Models\Order;
 use App\Models\Product;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
 
 class SellerController extends Controller
@@ -108,17 +109,96 @@ class SellerController extends Controller
             ->map(function ($o) {
                 return [
                     'id'           => $o->id,
+                    'order_number' => $o->order_number,
                     'total_amount' => (float) $o->total_amount,
                     'status'       => $o->status,
+                    'payment_status' => $o->payment_status,
                     'created_at'   => $o->created_at->toIso8601String(),
                     'client'       => $o->user ? $o->user->fullname : null,
                 ];
             });
 
+        // ── Stats détaillées ──────────────────────────────────────────────────
+
+        // Ventes par produit (top 10)
+        $salesByProduct = \DB::table('order_items as oi')
+            ->join('orders as o', 'o.id', '=', 'oi.order_id')
+            ->join('products as p', 'p.id', '=', 'oi.product_id')
+            ->where('p.seller_id', $seller->id)
+            ->where('o.payment_status', 'paid')
+            ->selectRaw('p.id, p.name, p.price, SUM(oi.quantity) as units_sold, SUM(oi.total_price) as revenue, COUNT(DISTINCT o.id) as orders_count')
+            ->groupBy('p.id', 'p.name', 'p.price')
+            ->orderByDesc('revenue')
+            ->limit(10)
+            ->get()
+            ->map(fn($r) => [
+                'product_id'   => $r->id,
+                'product_name' => $r->name,
+                'price'        => (float) $r->price,
+                'units_sold'   => (int) $r->units_sold,
+                'revenue'      => (float) $r->revenue,
+                'orders_count' => (int) $r->orders_count,
+            ]);
+
+        // Évolution mensuelle des revenus (6 derniers mois)
+        $monthlyRevenue = [];
+        for ($i = 5; $i >= 0; $i--) {
+            $month = now()->subMonths($i);
+            $rev = Order::where('seller_id', $seller->id)
+                ->where('payment_status', 'paid')
+                ->whereYear('created_at', $month->year)
+                ->whereMonth('created_at', $month->month)
+                ->sum('total_amount');
+            $orders = Order::where('seller_id', $seller->id)
+                ->whereYear('created_at', $month->year)
+                ->whereMonth('created_at', $month->month)
+                ->count();
+            $monthlyRevenue[] = [
+                'month'   => $month->locale('fr')->isoFormat('MMM YY'),
+                'revenue' => (float) $rev,
+                'orders'  => (int) $orders,
+            ];
+        }
+
+        // Répartition des commandes par statut
+        $ordersByStatus = Order::where('seller_id', $seller->id)
+            ->selectRaw('status, COUNT(*) as count')
+            ->groupBy('status')
+            ->pluck('count', 'status');
+
+        // Répartition paiements
+        $ordersByPayment = Order::where('seller_id', $seller->id)
+            ->selectRaw('payment_status, COUNT(*) as count')
+            ->groupBy('payment_status')
+            ->pluck('count', 'payment_status');
+
+        // Avis globaux
+        $productIds = $seller->products()->pluck('id');
+        $totalReviews = \DB::table('reviews')->whereIn('product_id', $productIds)->count();
+        $avgRating    = round(\DB::table('reviews')->whereIn('product_id', $productIds)->avg('rating') ?? 0, 1);
+        $totalSales   = (int) \DB::table('order_items as oi')
+            ->join('orders as o', 'o.id', '=', 'oi.order_id')
+            ->whereIn('oi.product_id', $productIds)
+            ->where('o.payment_status', 'paid')
+            ->sum('oi.quantity');
+
+        // Panier moyen
+        $avgOrderValue = $totalOrders > 0 ? round($revenue / max($totalOrders, 1), 2) : 0;
+
         $data = $this->formatSeller($seller);
-        $data['revenue']       = $revenue;
-        $data['total_orders']  = $totalOrders;
-        $data['recent_orders'] = $recentOrders;
+        $data['revenue']          = $revenue;
+        $data['total_orders']     = $totalOrders;
+        $data['recent_orders']    = $recentOrders;
+        $data['analytics']        = [
+            'total_sales'       => $totalSales,
+            'total_reviews'     => $totalReviews,
+            'avg_rating'        => $avgRating,
+            'avg_order_value'   => $avgOrderValue,
+            'sales_by_product'  => $salesByProduct,
+            'monthly_revenue'   => $monthlyRevenue,
+            'orders_by_status'  => $ordersByStatus,
+            'orders_by_payment' => $ordersByPayment,
+        ];
 
         return response()->json(['success' => true, 'data' => $data]);
     }

@@ -82,6 +82,13 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/user/stats', [AuthController::class, 'getStats']);
     Route::post('/logout', [AuthController::class, 'logout']);
 
+    // Trouver l'admin pour le support
+    Route::get('/support/admin', function () {
+        $admin = \App\Models\User::where('role', 'admin')->first(['id', 'fullname', 'email']);
+        if (!$admin) return response()->json(['success' => false, 'message' => 'Support indisponible'], 404);
+        return response()->json(['success' => true, 'data' => $admin]);
+    });
+
     // Vérification d'email (si activée)
     Route::post('/email/verification-notification', [EmailVerificationController::class, 'sendVerificationEmail']);
     Route::get('/verify-email/{id}/{hash}', [EmailVerificationController::class, 'verify'])->name('verification.verify');
@@ -200,6 +207,8 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::get('/sales-chart', [VendorReportController::class, 'salesChart']);
             Route::get('/top-products', [VendorReportController::class, 'topProducts']);
             Route::get('/category-stats', [VendorReportController::class, 'categoryStats']);
+            Route::get('/monthly-revenue', [VendorReportController::class, 'monthlyRevenue']);
+            Route::get('/orders-by-status', [VendorReportController::class, 'ordersByStatus']);
             Route::get('/conversion-stats', [VendorReportController::class, 'conversionStats']);
             Route::post('/export', [VendorReportController::class, 'export']);
         });

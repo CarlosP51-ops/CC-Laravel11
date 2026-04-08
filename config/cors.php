@@ -23,12 +23,13 @@ return [
         env('FRONTEND_URL', 'http://localhost:5173'),
         'http://localhost:5173',
         'http://localhost:3000',
-        // Vercel preview deployments
         'https://*.vercel.app',
+        'https://*.onrender.com',
     ],
 
     'allowed_origins_patterns' => [
         '#^https://.*\.vercel\.app$#',
+        '#^https://.*\.onrender\.com$#',
     ],
 
     'allowed_headers' => ['*'],

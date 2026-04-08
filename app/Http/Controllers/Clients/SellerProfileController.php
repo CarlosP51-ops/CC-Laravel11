@@ -12,12 +12,15 @@ class SellerProfileController extends Controller
     public function show(int $id): JsonResponse
     {
         $seller = Seller::with(['user'])
-            ->where('is_active', true)
+            ->where(function($q) {
+                $q->where('is_active', true)->orWhere('is_verified', true);
+            })
             ->findOrFail($id);
 
         // Produits approuvés et en stock
         $products = $seller->products()
             ->where('status', 'approved')
+            ->where('is_active', true)
             ->where(function ($q) {
                 $q->where('is_digital', true)
                   ->orWhere('stock_quantity', '>', 0);
@@ -31,20 +34,22 @@ class SellerProfileController extends Controller
                 'id'               => $p->id,
                 'slug'             => $p->slug,
                 'name'             => $p->name,
-                'price'            => $p->price,
-                'compare_at_price' => $p->compare_at_price,
+                'price'            => (float) $p->price,
+                'compare_at_price' => $p->compare_at_price ? (float) $p->compare_at_price : null,
                 'rating'           => round($p->reviews_avg_rating ?? 0, 1),
                 'reviews_count'    => $p->reviews_count ?? 0,
-                'is_digital'       => $p->is_digital,
-                'image'            => $p->images->first()?->image_path,
+                'is_digital'       => (bool) $p->is_digital,
+                'image'            => $this->buildUrl($p->images->first()?->image_path),
             ]);
 
-        // Stats calculées depuis order_items (pas de colonne sales_count)
+        // Stats calculées depuis order_items — uniquement commandes payées
         $productIds = $seller->products()->pluck('id');
 
         $totalSales = DB::table('order_items')
-            ->whereIn('product_id', $productIds)
-            ->sum('quantity');
+            ->join('orders', 'orders.id', '=', 'order_items.order_id')
+            ->whereIn('order_items.product_id', $productIds)
+            ->where('orders.payment_status', 'paid')
+            ->sum('order_items.quantity');
 
         $totalReviews = DB::table('reviews')
             ->whereIn('product_id', $productIds)
@@ -62,12 +67,12 @@ class SellerProfileController extends Controller
                 'store_name'  => $seller->store_name,
                 'slug'        => $seller->slug,
                 'description' => $seller->description,
-                'logo'        => $seller->logo,
-                'banner'      => $seller->banner,
+                'logo'        => $this->buildUrl($seller->logo),
+                'banner'      => $this->buildUrl($seller->banner),
                 'city'        => $seller->city,
                 'country'     => $seller->country,
-                'is_verified' => $seller->is_verified,
-                'joined'      => $seller->created_at->format('F Y'),
+                'is_verified' => (bool) $seller->is_verified,
+                'joined'      => $seller->created_at->locale('fr')->isoFormat('MMMM YYYY'),
                 'stats'       => [
                     'products' => $products->count(),
                     'sales'    => (int) $totalSales,
@@ -77,5 +82,12 @@ class SellerProfileController extends Controller
                 'products'    => $products,
             ],
         ]);
+    }
+
+    private function buildUrl(?string $path): ?string
+    {
+        if (!$path) return null;
+        if (str_starts_with($path, 'http')) return $path;
+        return config('app.url') . '/storage/' . ltrim($path, '/');
     }
 }

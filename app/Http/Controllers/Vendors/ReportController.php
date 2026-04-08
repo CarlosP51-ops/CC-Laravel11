@@ -6,269 +6,304 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use App\Models\Order;
-use App\Models\Product;
-use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
 
 class ReportController extends Controller
 {
-    /**
-     * Récupérer les statistiques générales du vendeur
-     */
+    private function getSeller()
+    {
+        return Auth::user()->seller;
+    }
+
+    private function notFound()
+    {
+        return response()->json(['success' => false, 'message' => 'Profil vendeur non trouvé'], 404);
+    }
+
+    // ── Overview ──────────────────────────────────────────────────────────────
     public function overview(Request $request)
     {
-        $user = Auth::user();
-        $seller = $user->seller;
+        $seller = $this->getSeller();
+        if (!$seller) return $this->notFound();
 
-        if (!$seller) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Profil vendeur non trouvé'
-            ], 404);
-        }
+        $period    = (int) $request->input('period', 30);
+        $start     = Carbon::now()->subDays($period);
+        $prevStart = Carbon::now()->subDays($period * 2);
+        $prevEnd   = Carbon::now()->subDays($period);
 
-        $period = $request->input('period', '30'); // 7, 30, 90, 365 jours
+        // Revenus période courante (commandes payées)
+        $totalRevenue = (float) Order::where('seller_id', $seller->id)
+            ->where('payment_status', 'paid')
+            ->where('created_at', '>=', $start)
+            ->sum('total_amount');
 
-        $startDate = Carbon::now()->subDays($period);
-        $endDate = Carbon::now();
+        // Revenus période précédente
+        $prevRevenue = (float) Order::where('seller_id', $seller->id)
+            ->where('payment_status', 'paid')
+            ->whereBetween('created_at', [$prevStart, $prevEnd])
+            ->sum('total_amount');
 
-        try {
-            // Revenus totaux
-            $totalRevenue = Order::where('seller_id', $seller->id)
-                ->whereIn('status', ['completed', 'delivered'])
-                ->whereBetween('created_at', [$startDate, $endDate])
-                ->sum('total_amount') ?? 0;
+        $revenueGrowth = $prevRevenue > 0
+            ? round((($totalRevenue - $prevRevenue) / $prevRevenue) * 100, 1)
+            : 0;
 
-            // Nombre de commandes
-            $totalOrders = Order::where('seller_id', $seller->id)
-                ->whereBetween('created_at', [$startDate, $endDate])
-                ->count() ?? 0;
+        // Commandes
+        $totalOrders = Order::where('seller_id', $seller->id)
+            ->where('created_at', '>=', $start)
+            ->count();
 
-            // Nombre de clients uniques
-            $uniqueCustomers = Order::where('seller_id', $seller->id)
-                ->whereBetween('created_at', [$startDate, $endDate])
-                ->distinct('user_id')
-                ->count('user_id') ?? 0;
+        $prevOrders = Order::where('seller_id', $seller->id)
+            ->whereBetween('created_at', [$prevStart, $prevEnd])
+            ->count();
 
-            // Produits vendus (estimation simple)
-            $productsSold = $totalOrders; // Simplifié pour éviter les requêtes complexes
+        $ordersGrowth = $prevOrders > 0
+            ? round((($totalOrders - $prevOrders) / $prevOrders) * 100, 1)
+            : 0;
 
-            // Panier moyen
-            $averageOrderValue = $totalOrders > 0 ? $totalRevenue / $totalOrders : 0;
+        // Clients uniques
+        $uniqueCustomers = Order::where('seller_id', $seller->id)
+            ->where('created_at', '>=', $start)
+            ->distinct('user_id')
+            ->count('user_id');
 
-            // Évolution par rapport à la période précédente (simplifié)
-            $revenueGrowth = 0; // Simplifié pour éviter les timeouts
-            $ordersGrowth = 0;  // Simplifié pour éviter les timeouts
+        // Produits vendus (unités)
+        $productIds = $seller->products()->pluck('id');
+        $productsSold = (int) DB::table('order_items as oi')
+            ->join('orders as o', 'o.id', '=', 'oi.order_id')
+            ->whereIn('oi.product_id', $productIds)
+            ->where('o.payment_status', 'paid')
+            ->where('o.created_at', '>=', $start)
+            ->sum('oi.quantity');
 
-            return response()->json([
-                'success' => true,
-                'data' => [
-                    'total_revenue' => (float) $totalRevenue,
-                    'total_orders' => (int) $totalOrders,
-                    'unique_customers' => (int) $uniqueCustomers,
-                    'products_sold' => (int) $productsSold,
-                    'average_order_value' => (float) $averageOrderValue,
-                    'revenue_growth' => (float) $revenueGrowth,
-                    'orders_growth' => (float) $ordersGrowth,
-                    'period' => $period,
-                ]
-            ]);
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Erreur lors du calcul des statistiques',
-                'error' => $e->getMessage()
-            ], 500);
-        }
-    }
-
-    /**
-     * Récupérer les données pour les graphiques de ventes
-     */
-    public function salesChart(Request $request)
-    {
-        $user = Auth::user();
-        $seller = $user->seller;
-
-        if (!$seller) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Profil vendeur non trouvé'
-            ], 404);
-        }
-
-        $period = $request->input('period', '30');
-        $startDate = Carbon::now()->subDays($period);
-
-        try {
-            // Données par jour pour la période demandée (simplifié)
-            $salesData = Order::where('seller_id', $seller->id)
-                ->whereIn('status', ['completed', 'delivered'])
-                ->whereBetween('created_at', [$startDate, Carbon::now()])
-                ->selectRaw('DATE(created_at) as date, SUM(total_amount) as revenue, COUNT(*) as orders')
-                ->groupBy('date')
-                ->orderBy('date')
-                ->get();
-
-            // Créer un tableau simple avec les 7 derniers jours seulement pour éviter les timeouts
-            $chartData = [];
-            $currentDate = Carbon::now()->subDays(6); // 7 derniers jours
-            
-            for ($i = 0; $i < 7; $i++) {
-                $dateStr = $currentDate->format('Y-m-d');
-                $dayData = $salesData->firstWhere('date', $dateStr);
-                
-                $chartData[] = [
-                    'date' => $dateStr,
-                    'revenue' => $dayData ? (float) $dayData->revenue : 0,
-                    'orders' => $dayData ? (int) $dayData->orders : 0,
-                    'formatted_date' => $currentDate->format('d/m')
-                ];
-                
-                $currentDate->addDay();
-            }
-
-            return response()->json([
-                'success' => true,
-                'data' => $chartData
-            ]);
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Erreur lors du calcul du graphique',
-                'error' => $e->getMessage()
-            ], 500);
-        }
-    }
-
-    /**
-     * Récupérer les produits les plus vendus
-     */
-    public function topProducts(Request $request)
-    {
-        $user = Auth::user();
-        $seller = $user->seller;
-
-        if (!$seller) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Profil vendeur non trouvé'
-            ], 404);
-        }
-
-        try {
-            // Retourner une liste vide pour l'instant pour éviter les timeouts
-            // TODO: Optimiser cette requête plus tard
-            $topProducts = [];
-
-            return response()->json([
-                'success' => true,
-                'data' => $topProducts
-            ]);
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Erreur lors du calcul des top produits',
-                'error' => $e->getMessage()
-            ], 500);
-        }
-    }
-
-    /**
-     * Récupérer les statistiques par catégorie
-     */
-    public function categoryStats(Request $request)
-    {
-        $user = Auth::user();
-        $seller = $user->seller;
-
-        if (!$seller) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Profil vendeur non trouvé'
-            ], 404);
-        }
-
-        try {
-            // Retourner une liste vide pour l'instant pour éviter les timeouts
-            // TODO: Optimiser cette requête plus tard
-            $categoryStats = [];
-
-            return response()->json([
-                'success' => true,
-                'data' => $categoryStats
-            ]);
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Erreur lors du calcul des stats par catégorie',
-                'error' => $e->getMessage()
-            ], 500);
-        }
-    }
-
-    /**
-     * Récupérer les données de conversion
-     */
-    public function conversionStats(Request $request)
-    {
-        $user = Auth::user();
-        $seller = $user->seller;
-
-        if (!$seller) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Profil vendeur non trouvé'
-            ], 404);
-        }
-
-        try {
-            // Données simplifiées pour éviter les timeouts
-            return response()->json([
-                'success' => true,
-                'data' => [
-                    'product_views' => 0,
-                    'orders' => 0,
-                    'conversion_rate' => 0,
-                    'cart_abandonment_rate' => 0,
-                ]
-            ]);
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Erreur lors du calcul des stats de conversion',
-                'error' => $e->getMessage()
-            ], 500);
-        }
-    }
-
-    /**
-     * Exporter les données de rapport
-     */
-    public function export(Request $request)
-    {
-        $user = Auth::user();
-        $seller = $user->seller;
-
-        if (!$seller) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Profil vendeur non trouvé'
-            ], 404);
-        }
-
-        $type = $request->input('type', 'sales'); // sales, products, customers
-        $period = $request->input('period', '30');
-        $format = $request->input('format', 'csv'); // csv, excel, pdf
-
-        // Ici vous pourriez implémenter la logique d'export
-        // Pour l'instant, on retourne juste un message de succès
+        // Panier moyen
+        $avgOrderValue = $totalOrders > 0 ? round($totalRevenue / $totalOrders, 2) : 0;
 
         return response()->json([
             'success' => true,
-            'message' => "Export {$type} en format {$format} généré avec succès",
-            'download_url' => "/api/vendor/reports/download/{$type}-{$period}-days.{$format}"
+            'data' => [
+                'total_revenue'       => $totalRevenue,
+                'total_orders'        => $totalOrders,
+                'unique_customers'    => $uniqueCustomers,
+                'products_sold'       => $productsSold,
+                'average_order_value' => $avgOrderValue,
+                'revenue_growth'      => $revenueGrowth,
+                'orders_growth'       => $ordersGrowth,
+                'period'              => $period,
+            ]
+        ]);
+    }
+
+    // ── Sales Chart ───────────────────────────────────────────────────────────
+    public function salesChart(Request $request)
+    {
+        $seller = $this->getSeller();
+        if (!$seller) return $this->notFound();
+
+        $period = (int) $request->input('period', 30);
+        // Pour les longues périodes, on agrège par semaine ou mois
+        $points = min($period, 30); // max 30 points
+        $startDate = Carbon::now()->subDays($period);
+
+        $salesData = Order::where('seller_id', $seller->id)
+            ->where('payment_status', 'paid')
+            ->where('created_at', '>=', $startDate)
+            ->selectRaw('DATE(created_at) as date, SUM(total_amount) as revenue, COUNT(*) as orders')
+            ->groupBy('date')
+            ->orderBy('date')
+            ->get()
+            ->keyBy('date');
+
+        $chartData = [];
+        $step = max(1, (int) ceil($period / $points));
+
+        for ($i = $period - 1; $i >= 0; $i -= $step) {
+            $date    = Carbon::now()->subDays($i);
+            $dateStr = $date->format('Y-m-d');
+            $day     = $salesData->get($dateStr);
+
+            $chartData[] = [
+                'date'           => $dateStr,
+                'revenue'        => $day ? (float) $day->revenue : 0,
+                'orders'         => $day ? (int) $day->orders : 0,
+                'formatted_date' => $date->locale('fr')->isoFormat('D MMM'),
+            ];
+        }
+
+        return response()->json(['success' => true, 'data' => $chartData]);
+    }
+
+    // ── Top Products ──────────────────────────────────────────────────────────
+    public function topProducts(Request $request)
+    {
+        $seller = $this->getSeller();
+        if (!$seller) return $this->notFound();
+
+        $period = (int) $request->input('period', 30);
+        $limit  = (int) $request->input('limit', 10);
+        $start  = Carbon::now()->subDays($period);
+
+        $products = DB::table('order_items as oi')
+            ->join('orders as o', 'o.id', '=', 'oi.order_id')
+            ->join('products as p', 'p.id', '=', 'oi.product_id')
+            ->where('p.seller_id', $seller->id)
+            ->where('o.payment_status', 'paid')
+            ->where('o.created_at', '>=', $start)
+            ->selectRaw('p.id, p.name, p.price, SUM(oi.quantity) as total_sold, SUM(oi.total_price) as total_revenue, COUNT(DISTINCT o.id) as orders_count')
+            ->groupBy('p.id', 'p.name', 'p.price')
+            ->orderByDesc('total_revenue')
+            ->limit($limit)
+            ->get()
+            ->map(fn($r) => [
+                'id'            => $r->id,
+                'name'          => $r->name,
+                'price'         => (float) $r->price,
+                'total_sold'    => (int) $r->total_sold,
+                'total_revenue' => (float) $r->total_revenue,
+                'orders_count'  => (int) $r->orders_count,
+            ]);
+
+        return response()->json(['success' => true, 'data' => $products]);
+    }
+
+    // ── Category Stats ────────────────────────────────────────────────────────
+    public function categoryStats(Request $request)
+    {
+        $seller = $this->getSeller();
+        if (!$seller) return $this->notFound();
+
+        $period = (int) $request->input('period', 30);
+        $start  = Carbon::now()->subDays($period);
+
+        $stats = DB::table('order_items as oi')
+            ->join('orders as o', 'o.id', '=', 'oi.order_id')
+            ->join('products as p', 'p.id', '=', 'oi.product_id')
+            ->join('categories as c', 'c.id', '=', 'p.category_id')
+            ->where('p.seller_id', $seller->id)
+            ->where('o.payment_status', 'paid')
+            ->where('o.created_at', '>=', $start)
+            ->selectRaw('c.id, c.name, SUM(oi.quantity) as total_sold, SUM(oi.total_price) as total_revenue, COUNT(DISTINCT o.id) as total_orders')
+            ->groupBy('c.id', 'c.name')
+            ->orderByDesc('total_revenue')
+            ->get()
+            ->map(fn($r) => [
+                'id'            => $r->id,
+                'name'          => $r->name,
+                'total_sold'    => (int) $r->total_sold,
+                'total_revenue' => (float) $r->total_revenue,
+                'total_orders'  => (int) $r->total_orders,
+            ]);
+
+        return response()->json(['success' => true, 'data' => $stats]);
+    }
+
+    // ── Monthly Revenue (6 mois) ──────────────────────────────────────────────
+    public function monthlyRevenue(Request $request)
+    {
+        $seller = $this->getSeller();
+        if (!$seller) return $this->notFound();
+
+        $data = [];
+        for ($i = 5; $i >= 0; $i--) {
+            $month = Carbon::now()->subMonths($i);
+            $rev = (float) Order::where('seller_id', $seller->id)
+                ->where('payment_status', 'paid')
+                ->whereYear('created_at', $month->year)
+                ->whereMonth('created_at', $month->month)
+                ->sum('total_amount');
+            $orders = (int) Order::where('seller_id', $seller->id)
+                ->whereYear('created_at', $month->year)
+                ->whereMonth('created_at', $month->month)
+                ->count();
+            $data[] = [
+                'month'   => $month->locale('fr')->isoFormat('MMM YY'),
+                'revenue' => $rev,
+                'orders'  => $orders,
+            ];
+        }
+
+        return response()->json(['success' => true, 'data' => $data]);
+    }
+
+    // ── Orders by Status ──────────────────────────────────────────────────────
+    public function ordersByStatus(Request $request)
+    {
+        $seller = $this->getSeller();
+        if (!$seller) return $this->notFound();
+
+        $period = (int) $request->input('period', 30);
+        $start  = Carbon::now()->subDays($period);
+
+        $byStatus = Order::where('seller_id', $seller->id)
+            ->where('created_at', '>=', $start)
+            ->selectRaw('status, COUNT(*) as count')
+            ->groupBy('status')
+            ->pluck('count', 'status');
+
+        $byPayment = Order::where('seller_id', $seller->id)
+            ->where('created_at', '>=', $start)
+            ->selectRaw('payment_status, COUNT(*) as count')
+            ->groupBy('payment_status')
+            ->pluck('count', 'payment_status');
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'by_status'  => $byStatus,
+                'by_payment' => $byPayment,
+            ]
+        ]);
+    }
+
+    // ── Conversion Stats ──────────────────────────────────────────────────────
+    public function conversionStats(Request $request)
+    {
+        $seller = $this->getSeller();
+        if (!$seller) return $this->notFound();
+
+        // Pas de tracking de vues pour l'instant — on retourne les données disponibles
+        $period = (int) $request->input('period', 30);
+        $start  = Carbon::now()->subDays($period);
+
+        $orders = Order::where('seller_id', $seller->id)
+            ->where('created_at', '>=', $start)
+            ->count();
+
+        $paid = Order::where('seller_id', $seller->id)
+            ->where('payment_status', 'paid')
+            ->where('created_at', '>=', $start)
+            ->count();
+
+        $cancelled = Order::where('seller_id', $seller->id)
+            ->where('status', 'cancelled')
+            ->where('created_at', '>=', $start)
+            ->count();
+
+        $conversionRate = $orders > 0 ? round(($paid / $orders) * 100, 2) : 0;
+        $cancellationRate = $orders > 0 ? round(($cancelled / $orders) * 100, 2) : 0;
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'product_views'         => 0, // pas de tracking
+                'orders'                => $orders,
+                'paid_orders'           => $paid,
+                'conversion_rate'       => $conversionRate,
+                'cart_abandonment_rate' => $cancellationRate,
+            ]
+        ]);
+    }
+
+    // ── Export ────────────────────────────────────────────────────────────────
+    public function export(Request $request)
+    {
+        $seller = $this->getSeller();
+        if (!$seller) return $this->notFound();
+
+        return response()->json([
+            'success'      => true,
+            'message'      => 'Export généré avec succès',
+            'download_url' => null,
         ]);
     }
 }

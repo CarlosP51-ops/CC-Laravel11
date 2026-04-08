@@ -18,7 +18,11 @@ class ProductController extends Controller
         $query = Product::with(['category', 'seller', 'images'])
             ->where('is_active', true)
             ->where('status', 'approved')
-            ->where('stock_quantity', '>', 0);
+            ->where(function ($q) {
+                // Inclure les produits digitaux (stock illimité) ET les physiques avec stock > 0
+                $q->where('is_digital', true)
+                  ->orWhere('stock_quantity', '>', 0);
+            });
 
         // Filtre par catégorie
         if ($request->has('category')) {
@@ -364,7 +368,9 @@ class ProductController extends Controller
             ->where('id', '!=', $product->id)
             ->where('is_active', true)
             ->where('status', 'approved')
-            ->where('stock_quantity', '>', 0)
+            ->where(function ($q) {
+                $q->where('is_digital', true)->orWhere('stock_quantity', '>', 0);
+            })
             ->with(['category', 'seller', 'images'])
             ->inRandomOrder()
             ->limit($limit)
