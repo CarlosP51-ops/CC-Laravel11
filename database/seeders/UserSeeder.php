@@ -18,9 +18,9 @@ class UserSeeder extends Seeder
         ]);
 
         // Créer des utilisateurs normaux
-     // User::factory()->count(10)->create();
+     User::factory()->count(10)->create();
 
         // Créer des vendeurs
-      //  User::factory()->count(5)->vendor()->create();
+       User::factory()->count(5)->vendor()->create();
     }
 }
