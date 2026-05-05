@@ -78,7 +78,8 @@ Route::prefix('promotions')->group(function () {
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('/user', [AuthController::class, 'me']);
     Route::put('/user/profile', [AuthController::class, 'updateProfile']);
-    Route::post('/user/profile', [AuthController::class, 'updateProfile']); // Pour FormData avec fichiers
+    Route::post('/user/profile', [AuthController::class, 'updateProfile']);
+    Route::post('/user/upload-url', [AuthController::class, 'getUploadUrl']); // URL signée Supabase
     Route::put('/user/password', [AuthController::class, 'changePassword']);
     Route::get('/user/stats', [AuthController::class, 'getStats']);
     Route::post('/logout', [AuthController::class, 'logout']);

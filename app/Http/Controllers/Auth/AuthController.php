@@ -147,32 +147,30 @@ public function register(RegisterRequest $request)
     }
 
     /**
-     * Mettre à jour le profil utilisateur
+     * Mettre à jour le profil utilisateur (sans fichiers)
      */
     public function updateProfile(Request $request)
     {
         $validated = $request->validate([
             'fullname' => 'sometimes|string|max:255',
             'phone'    => 'sometimes|string|max:20',
+            'logo'     => 'sometimes|nullable|string|url', // URL Supabase
+            'banner'   => 'sometimes|nullable|string|url', // URL Supabase
         ]);
 
         $user = $request->user();
-        $user->update($validated);
+        $user->update(array_filter([
+            'fullname' => $validated['fullname'] ?? null,
+            'phone'    => $validated['phone'] ?? null,
+        ], fn($v) => $v !== null));
 
-        // Mise à jour logo/bannière vendeur si fournis
+        // Mettre à jour logo/bannière vendeur si URLs fournies
         if ($user->role === 'vendor' && $user->seller) {
-            $sellerData = [];
+            $sellerData = array_filter([
+                'logo'   => $validated['logo'] ?? null,
+                'banner' => $validated['banner'] ?? null,
+            ], fn($v) => $v !== null);
 
-            if ($request->hasFile('logo')) {
-                $sellerData['logo'] = \App\Services\StorageService::uploadImage(
-                    $request->file('logo'), 'logos'
-                );
-            }
-            if ($request->hasFile('banner')) {
-                $sellerData['banner'] = \App\Services\StorageService::uploadImage(
-                    $request->file('banner'), 'banners'
-                );
-            }
             if (!empty($sellerData)) {
                 $user->seller->update($sellerData);
             }
@@ -182,6 +180,57 @@ public function register(RegisterRequest $request)
             'success' => true,
             'message' => 'Profil mis à jour avec succès',
             'data'    => ['user' => new UserResource($user->fresh(['seller']))]
+        ]);
+    }
+
+    /**
+     * Générer une URL signée Supabase pour upload direct depuis le frontend
+     */
+    public function getUploadUrl(Request $request)
+    {
+        $validated = $request->validate([
+            'filename'    => 'required|string',
+            'folder'      => 'required|string|in:logos,banners,products,files',
+            'content_type'=> 'required|string',
+        ]);
+
+        $supabaseUrl = env('SUPABASE_URL');
+        $supabaseKey = env('SUPABASE_ANON_KEY');
+        $bucket      = in_array($validated['folder'], ['files']) ? env('SUPABASE_PRIVATE_BUCKET', 'private-files') : env('SUPABASE_BUCKET', 'media');
+
+        if (!$supabaseUrl || !$supabaseKey) {
+            return response()->json(['success' => false, 'message' => 'Storage non configuré'], 500);
+        }
+
+        $ext      = pathinfo($validated['filename'], PATHINFO_EXTENSION);
+        $path     = $validated['folder'] . '/' . \Illuminate\Support\Str::uuid() . '.' . $ext;
+
+        // Générer URL signée d'upload (valable 60 secondes)
+        $response = \Illuminate\Support\Facades\Http::withHeaders([
+            'Authorization' => 'Bearer ' . $supabaseKey,
+            'apikey'        => $supabaseKey,
+        ])->post($supabaseUrl . '/storage/v1/object/sign/upload/' . $bucket . '/' . $path, [
+            'upsert' => true,
+        ]);
+
+        if (!$response->successful()) {
+            return response()->json(['success' => false, 'message' => 'Impossible de générer l\'URL d\'upload'], 500);
+        }
+
+        $isPublic  = $bucket === env('SUPABASE_BUCKET', 'media');
+        $publicUrl = $isPublic
+            ? $supabaseUrl . '/storage/v1/object/public/' . $bucket . '/' . $path
+            : null;
+
+        return response()->json([
+            'success'    => true,
+            'data'       => [
+                'upload_url'   => $supabaseUrl . '/storage/v1' . $response->json('url'),
+                'token'        => $response->json('token'),
+                'path'         => $path,
+                'public_url'   => $publicUrl,
+                'bucket'       => $bucket,
+            ]
         ]);
     }
 
