@@ -89,7 +89,7 @@ class StorageService
             'apikey'        => self::key(),
             'Content-Type'  => $file->getMimeType(),
             'x-upsert'      => 'true',
-        ])->withBody(file_get_contents($file->getRealPath()), $file->getMimeType())
+        ])->withBody(fopen($file->getRealPath(), 'r'), $file->getMimeType())
           ->post(self::url() . '/storage/v1/object/' . $bucket . '/' . $filename);
 
         if ($response->successful()) {
@@ -97,7 +97,6 @@ class StorageService
         }
 
         \Log::error('Supabase upload failed: ' . $response->body());
-        // Fallback local
         $path = $file->store(explode('/', $folder)[0], 'public');
         return Storage::url($path);
     }
@@ -109,12 +108,12 @@ class StorageService
             'apikey'        => self::key(),
             'Content-Type'  => $file->getMimeType(),
             'x-upsert'      => 'true',
-        ])->withBody(file_get_contents($file->getRealPath()), $file->getMimeType())
+        ])->withBody(fopen($file->getRealPath(), 'r'), $file->getMimeType())
           ->post(self::url() . '/storage/v1/object/' . $bucket . '/' . $path);
 
         if (!$response->successful()) {
             \Log::error('Supabase private upload failed: ' . $response->body());
-            throw new \Exception('Échec de l\'upload du fichier.');
+            throw new \Exception('Echec de l\'upload du fichier.');
         }
     }
 
