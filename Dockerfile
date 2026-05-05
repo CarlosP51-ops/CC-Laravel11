@@ -37,9 +37,9 @@ RUN composer install --no-dev --optimize-autoloader --no-interaction
 
 # Permissions storage
 RUN mkdir -p storage/app/public storage/app/private storage/framework/cache \
-    storage/framework/sessions storage/framework/views bootstrap/cache \
-    && chmod -R 775 storage bootstrap/cache \
-    && chown -R www-data:www-data storage bootstrap/cache
+    storage/framework/sessions storage/framework/views storage/logs bootstrap/cache \
+    && chmod -R 777 storage bootstrap/cache \
+    && chown -R www-data:www-data storage bootstrap/cache public
 
 # Config Nginx
 COPY docker/nginx.conf /etc/nginx/nginx.conf
