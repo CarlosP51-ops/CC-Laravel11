@@ -37,6 +37,7 @@ RUN composer install --no-dev --optimize-autoloader --no-interaction
 
 # Config PHP
 COPY docker/php.ini /usr/local/etc/php/conf.d/custom.ini
+COPY docker/www.conf /usr/local/etc/php-fpm.d/www.conf
 
 # Permissions storage
 RUN mkdir -p storage/app/public storage/app/private storage/framework/cache \
