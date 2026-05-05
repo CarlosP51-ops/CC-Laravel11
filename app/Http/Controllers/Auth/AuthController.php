@@ -46,12 +46,8 @@ public function register(RegisterRequest $request)
                 ], 409);
             }
 
-            $logoPath   = $request->hasFile('logo')
-                ? \App\Services\StorageService::uploadImage($request->file('logo'), 'logos')
-                : null;
-            $bannerPath = $request->hasFile('banner')
-                ? \App\Services\StorageService::uploadImage($request->file('banner'), 'banners')
-                : null;
+            $logoPath   = null;
+            $bannerPath = null;
 
             // Créer le vendeur
             Seller::create([

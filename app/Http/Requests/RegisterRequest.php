@@ -45,8 +45,6 @@ class RegisterRequest extends FormRequest
                 'store_name' => self::STORE_NAME_RULES,
                 'slug' => self::SLUG_RULES,
                 'description' => self::DESCRIPTION_RULES,
-                'logo' => 'nullable|image|mimes:jpeg,jpg,png,gif,webp|max:2048',
-                'banner' => 'nullable|image|mimes:jpeg,jpg,png,gif,webp|max:5120',
                 'address' => self::ADDRESS_RULES,
                 'city' => self::CITY_RULES,
                 'postal_code' => self::POSTAL_CODE_RULES,
