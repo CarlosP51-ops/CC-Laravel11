@@ -20,7 +20,24 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withExceptions(function (Exceptions $exceptions) {
         $exceptions->render(function (\Illuminate\Auth\AuthenticationException $e, $request) {
             if ($request->is('api/*') || $request->expectsJson()) {
-                return response()->json(['success' => false, 'message' => 'Non authentifié'], 401);
+                return response()->json(['success' => false, 'message' => 'Non authentifié'], 401)
+                    ->header('Access-Control-Allow-Origin', '*')
+                    ->header('Access-Control-Allow-Methods', '*')
+                    ->header('Access-Control-Allow-Headers', '*');
+            }
+        });
+
+        // S'assurer que toutes les erreurs API retournent les headers CORS
+        $exceptions->render(function (\Throwable $e, $request) {
+            if ($request->is('api/*') || $request->expectsJson()) {
+                $status = method_exists($e, 'getStatusCode') ? $e->getStatusCode() : 500;
+                return response()->json([
+                    'success' => false,
+                    'message' => $e->getMessage() ?: 'Erreur serveur',
+                ], $status)
+                    ->header('Access-Control-Allow-Origin', '*')
+                    ->header('Access-Control-Allow-Methods', '*')
+                    ->header('Access-Control-Allow-Headers', '*');
             }
         });
     })->create();
