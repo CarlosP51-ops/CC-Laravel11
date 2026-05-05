@@ -35,6 +35,9 @@ COPY . .
 # Installer les dépendances (sans dev)
 RUN composer install --no-dev --optimize-autoloader --no-interaction
 
+# Config PHP
+COPY docker/php.ini /usr/local/etc/php/conf.d/custom.ini
+
 # Permissions storage
 RUN mkdir -p storage/app/public storage/app/private storage/framework/cache \
     storage/framework/sessions storage/framework/views storage/logs bootstrap/cache \

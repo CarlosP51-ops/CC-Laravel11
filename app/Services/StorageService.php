@@ -14,15 +14,20 @@ class StorageService
     public static function uploadImage(UploadedFile $file, string $folder = 'general'): string
     {
         if (config('app.env') === 'production' && config('cloudinary.cloud_name')) {
-            $result = cloudinary()->upload($file->getRealPath(), [
-                'folder'         => 'digital-marketplace/' . $folder,
-                'resource_type'  => 'image',
-                'transformation' => [['quality' => 'auto', 'fetch_format' => 'auto']],
-            ]);
-            return $result->getSecurePath();
+            try {
+                $result = cloudinary()->upload($file->getRealPath(), [
+                    'folder'         => 'digital-marketplace/' . $folder,
+                    'resource_type'  => 'image',
+                    'transformation' => [['quality' => 'auto', 'fetch_format' => 'auto']],
+                ]);
+                return $result->getSecurePath();
+            } catch (\Exception $e) {
+                \Log::error('Cloudinary upload failed: ' . $e->getMessage());
+                // Fallback vers stockage local si Cloudinary échoue
+            }
         }
 
-        // Développement local : stockage classique
+        // Développement local ou fallback
         $path = $file->store($folder, 'public');
         return Storage::url($path);
     }
