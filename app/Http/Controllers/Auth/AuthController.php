@@ -153,20 +153,35 @@ public function register(RegisterRequest $request)
     {
         $validated = $request->validate([
             'fullname' => 'sometimes|string|max:255',
-            'phone' => 'sometimes|string|max:20',
-            'location' => 'sometimes|string|max:255',
-            'website' => 'sometimes|url|max:255',
+            'phone'    => 'sometimes|string|max:20',
         ]);
 
         $user = $request->user();
         $user->update($validated);
 
+        // Mise à jour logo/bannière vendeur si fournis
+        if ($user->role === 'vendor' && $user->seller) {
+            $sellerData = [];
+
+            if ($request->hasFile('logo')) {
+                $sellerData['logo'] = \App\Services\StorageService::uploadImage(
+                    $request->file('logo'), 'logos'
+                );
+            }
+            if ($request->hasFile('banner')) {
+                $sellerData['banner'] = \App\Services\StorageService::uploadImage(
+                    $request->file('banner'), 'banners'
+                );
+            }
+            if (!empty($sellerData)) {
+                $user->seller->update($sellerData);
+            }
+        }
+
         return response()->json([
             'success' => true,
             'message' => 'Profil mis à jour avec succès',
-            'data' => [
-                'user' => new UserResource($user)
-            ]
+            'data'    => ['user' => new UserResource($user->fresh(['seller']))]
         ]);
     }
 
